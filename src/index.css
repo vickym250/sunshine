@@ -1,0 +1,26 @@
+@import "tailwindcss";
+/* 🌟 FINAL RECEIPT PRINT FIX – 100% ONE PAGE 🌟 */
+@media print {
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #print-area, #print-area * {
+    visibility: visible !important;
+  }
+
+  #print-area {
+    position: fixed !important;
+    top: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    box-shadow: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+}
+
