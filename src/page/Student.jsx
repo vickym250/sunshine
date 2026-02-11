@@ -131,35 +131,41 @@ export default function StudentList() {
                     <td className="px-4 py-3 text-sm text-gray-500">{s.className}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{s.phone || "N/A"}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {/* 🔥 Naya Details Button */}
-                        <button 
-                          onClick={() => handleOpenDetails(s)} 
-                          className="bg-gray-600 text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-gray-700 uppercase"
-                        >
-                          Details
-                        </button>
+  <div className="flex items-center justify-center gap-1.5">
+    {/* 🔥 Details Button (Sabke liye) */}
+    <button 
+      onClick={() => handleOpenDetails(s)} 
+      className="bg-gray-600 text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-gray-700 uppercase"
+    >
+      Details
+    </button>
 
-                        {s.session === CURRENT_ACTIVE_SESSION ? (
-                          <>
-                            <button 
-                              onClick={() => navigator(`/feesrec/${s.id}`)} 
-                              className="bg-[#2563EB] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-blue-700 uppercase"
-                            >
-                              Fees
-                            </button>
-                            <button onClick={() => { setEditStudent(s); setOpen(true); }} className="bg-[#FBBF24] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-amber-500 uppercase">Edit</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => handleReAdmission(s)} className="bg-emerald-600 text-white px-2 py-1 rounded text-[11px] font-bold hover:bg-emerald-700 uppercase">Re-Admit</button>
-                            <button onClick={() => navigator(`/tc/${s.id}`)} className="bg-red-600 text-white px-2 py-1 rounded text-[11px] font-bold hover:bg-red-700 uppercase">TC</button>
-                          </>
-                        )}
-                        <button onClick={() => handleDelete(s.id)} className="bg-[#EF4444] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-red-600 uppercase">Delete</button>
-                        <button onClick={() => navigator(`/idcard/${s.id}`)} className="bg-white text-blue-600 border border-blue-600 px-3 py-1 rounded text-[11px] font-bold hover:bg-blue-50 uppercase tracking-tighter">IdCard</button>
-                      </div>
-                    </td>
+    {/* 🔥 Fees Button (Ab sabke liye dikhega aur student ID pass hogi) */}
+    <button 
+      onClick={() => navigator(`/feesrec/${s.id}`)} 
+      className="bg-[#2563EB] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-blue-700 uppercase"
+    >
+      Fees
+    </button>
+
+    {s.session === CURRENT_ACTIVE_SESSION ? (
+      <>
+        {/* Current Session ke liye Edit */}
+        <button onClick={() => { setEditStudent(s); setOpen(true); }} className="bg-[#FBBF24] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-amber-500 uppercase">Edit</button>
+      </>
+    ) : (
+      <>
+        {/* Purane Session ke liye Re-Admit aur TC */}
+        <button onClick={() => handleReAdmission(s)} className="bg-emerald-600 text-white px-2 py-1 rounded text-[11px] font-bold hover:bg-emerald-700 uppercase">Re-Admit</button>
+        <button onClick={() => navigator(`/tc/${s.id}`)} className="bg-red-600 text-white px-2 py-1 rounded text-[11px] font-bold hover:bg-red-700 uppercase">TC</button>
+      </>
+    )}
+
+    {/* Delete aur IdCard (Sabke liye) */}
+    <button onClick={() => handleDelete(s.id)} className="bg-[#EF4444] text-white px-3 py-1 rounded text-[11px] font-bold hover:bg-red-600 uppercase">Delete</button>
+    <button onClick={() => navigator(`/idcard/${s.id}`)} className="bg-white text-blue-600 border border-blue-600 px-3 py-1 rounded text-[11px] font-bold hover:bg-blue-50 uppercase tracking-tighter">IdCard</button>
+  </div>
+</td>
                   </tr>
                 );
               })}
