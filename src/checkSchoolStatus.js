@@ -3,7 +3,7 @@ import { masterDB } from "./masterFirebase";
 
 export const checkSchoolStatus = async () => {
   // 👇 EXACT wahi ID jo Firestore me hai
-  const SCHOOL_DOC_ID = "qTPKVuyx3BiWzTNJOlYA";
+  const SCHOOL_DOC_ID = "0EcDtkjmYIy4YtfFeuD1";
 
   const ref = doc(masterDB, "schools", SCHOOL_DOC_ID);
   const snap = await getDoc(ref);
