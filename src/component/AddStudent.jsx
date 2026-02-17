@@ -108,25 +108,28 @@ export default function AddStudent({ close, editData }) {
     return () => { isMounted = false; };
   }, [editData]);
 
-  // 2. 🔵 Live Registration & Roll Number using 'where' Clause
+  // 2. 🔵 Live Registration & Roll Number (Modified for Manual Entry)
   useEffect(() => {
     if (!form.session || editData) return;
 
     const fetchIdentifiers = async () => {
       try {
-        // Query for Registration No (Filtered by Session)
-        const regQ = query(
-          collection(db, "students"),
-          where("session", "==", form.session),
-          orderBy("regNo", "desc"),
-          limit(1)
-        );
-        const regSnap = await getDocs(regQ);
-        const nextReg = regSnap.empty ? "1001" : (parseInt(regSnap.docs[0].data().regNo) + 1).toString();
+        let updateData = {};
 
-        // Query for Roll No (Filtered by Session AND Class)
-        let nextRoll = "...";
-        if (form.className) {
+        // Fetch Reg No only if it's default or empty
+        if (form.regNo === "..." || form.regNo === "") {
+          const regQ = query(
+            collection(db, "students"),
+            where("session", "==", form.session),
+            orderBy("regNo", "desc"),
+            limit(1)
+          );
+          const regSnap = await getDocs(regQ);
+          updateData.regNo = regSnap.empty ? "1001" : (parseInt(regSnap.docs[0].data().regNo) + 1).toString();
+        }
+
+        // Fetch Roll No only if class is selected and roll is default
+        if (form.className && (form.rollNumber === "..." || form.rollNumber === "Wait..." || form.rollNumber === "")) {
           const rollQ = query(
             collection(db, "students"),
             where("className", "==", form.className),
@@ -138,10 +141,12 @@ export default function AddStudent({ close, editData }) {
             const r = parseInt(d.data().rollNumber);
             if (!isNaN(r) && r > max) max = r;
           });
-          nextRoll = (max + 1).toString();
+          updateData.rollNumber = (max + 1).toString();
         }
 
-        setForm(prev => ({ ...prev, regNo: nextReg, rollNumber: nextRoll }));
+        if (Object.keys(updateData).length > 0) {
+          setForm(prev => ({ ...prev, ...updateData }));
+        }
       } catch (err) {
         console.error("Live fetch error:", err);
       }
@@ -157,6 +162,7 @@ export default function AddStudent({ close, editData }) {
     } else if (type === "checkbox") {
       setForm(prev => ({ ...prev, [name]: checked }));
     } else if (name === "className") {
+      // Trigger "Wait" only if user hasn't typed a manual roll yet
       setForm(prev => ({ ...prev, className: value, rollNumber: "Wait..." }));
       setSubjects(subjectMapping[value] || []);
     } else {
@@ -246,19 +252,32 @@ export default function AddStudent({ close, editData }) {
               <div className="md:col-span-2 font-black text-blue-600 border-l-4 border-blue-600 pl-2 uppercase text-[11px] bg-blue-50 py-1">{t.studentInfo}</div>
               
               <div className="md:col-span-2 grid grid-cols-3 gap-3 mb-2">
+                {/* Editable Reg No */}
                 <div className="bg-blue-50 p-3 rounded-2xl border-2 border-blue-100 flex flex-col items-center">
                   <span className="text-[9px] font-black text-blue-400 uppercase">Reg No</span>
-                  <span className="text-lg font-black text-blue-800">{form.regNo}</span>
+                  <input 
+                    name="regNo" 
+                    value={form.regNo} 
+                    onChange={handleChange} 
+                    className="bg-transparent font-black text-blue-800 text-lg text-center outline-none w-full"
+                  />
                 </div>
+                {/* Session */}
                 <div className="bg-orange-50 p-3 rounded-2xl border-2 border-orange-100 flex flex-col items-center">
                   <span className="text-[9px] font-black text-orange-400 uppercase">Session</span>
                   <select name="session" value={form.session} onChange={handleChange} className="bg-transparent font-black text-orange-800 outline-none text-sm cursor-pointer">
                     {getSessionOptions().map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+                {/* Editable Roll No */}
                 <div className="bg-green-50 p-3 rounded-2xl border-2 border-green-100 flex flex-col items-center">
                   <span className="text-[9px] font-black text-green-400 uppercase">Roll No</span>
-                  <span className="text-lg font-black text-green-800">{form.rollNumber}</span>
+                  <input 
+                    name="rollNumber" 
+                    value={form.rollNumber} 
+                    onChange={handleChange} 
+                    className="bg-transparent font-black text-green-800 text-lg text-center outline-none w-full"
+                  />
                 </div>
               </div>
 
