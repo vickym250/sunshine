@@ -6,23 +6,49 @@ import {
   onSnapshot,
   query,
   orderBy,
-  getDoc
+  getDoc,
+  where
 } from "firebase/firestore";
 import { useParams } from "react-router-dom";
 
 export default function IDCardGenerator() {
   const { studentId } = useParams();
+
+  // --- 🟢 Auto Session Calculation (April to March) ---
+  const getCurrentSession = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0 = Jan, 3 = April
+    const currentYear = now.getFullYear();
+    
+    if (currentMonth >= 3) {
+      return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+    } else {
+      return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+    }
+  };
+
+  // States
   const [className, setClassName] = useState("Class 1");
+  const [session, setSession] = useState(getCurrentSession()); 
   const [students, setStudents] = useState([]);
-  const [isPrinting, setIsPrinting] = useState(false); // Loading state ke liye
+  const [isPrinting, setIsPrinting] = useState(false);
   const [school, setSchool] = useState({
     name: "Bright Future School",
     address: "Dumariya, Uttar Pradesh, 272189",
     logoUrl: ""
   });
 
+  // Dynamic Session List for Dropdown
+  const getSessionOptions = () => {
+    const currentYear = new Date().getFullYear();
+    return [
+      `${currentYear - 1}-${currentYear.toString().slice(-2)}`,
+      `${currentYear}-${(currentYear + 1).toString().slice(-2)}`,
+      `${currentYear + 1}-${(currentYear + 2).toString().slice(-2)}`,
+    ];
+  };
+
   useEffect(() => {
-    // 1. School Details Fetch
     const fetchSchool = async () => {
       const docRef = doc(db, "settings", "schoolDetails");
       const docSnap = await getDoc(docRef);
@@ -31,46 +57,52 @@ export default function IDCardGenerator() {
       }
     };
     fetchSchool();
+  }, []);
 
-    // 2. Students Fetch
-    const q = query(collection(db, "students"), orderBy("rollNumber", "asc"));
+  useEffect(() => {
+    let q;
+    if (studentId) {
+      q = query(collection(db, "students"), where("__name__", "==", studentId));
+    } else {
+      // NOTE: Ensure you have a composite index in Firebase for className + session + rollNumber
+      q = query(
+        collection(db, "students"),
+        where("className", "==", className),
+        where("session", "==", session),
+        orderBy("rollNumber", "asc")
+      );
+    }
+
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((s) => !s.deletedAt);
       setStudents(data);
+    }, (error) => {
+      console.error("Firestore Error:", error);
     });
-    return () => unsub();
-  }, []);
 
-  const filteredStudents = studentId
-    ? students.filter((s) => s.id === studentId)
-    : students.filter(
-        (s) => s.className?.toLowerCase() === className.toLowerCase()
-      );
+    return () => unsub();
+  }, [className, session, studentId]);
 
   const handlePrint = async () => {
-    if (filteredStudents.length === 0) return alert("No students found!");
+    if (students.length === 0) return alert("No students found!");
     
-    setIsPrinting(true); // Loading chalu
-
+    setIsPrinting(true);
     let printFrame = document.getElementById("printFrame");
     if (!printFrame) {
       printFrame = document.createElement("iframe");
       printFrame.id = "printFrame";
+      printFrame.style.visibility = "hidden";
       printFrame.style.position = "fixed";
-      printFrame.style.right = "0";
-      printFrame.style.bottom = "0";
-      printFrame.style.width = "0";
-      printFrame.style.height = "0";
-      printFrame.style.border = "none";
       document.body.appendChild(printFrame);
     }
 
     let cardsHTML = "";
-    filteredStudents.forEach((s) => {
+    students.forEach((s) => {
+      // Dynamic profile link for QR
       const profileUrl = `https://school-admin-pi.vercel.app/profile/${s.id}`;
-      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(profileUrl)}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(profileUrl)}&margin=10`;
 
       cardsHTML += `
         <div class="id-card">
@@ -81,143 +113,153 @@ export default function IDCardGenerator() {
               <div class="school-address">${school.address}</div>
             </div>
           </div>
-          
           <div class="card-body">
             <div class="qr-code-top">
               <img src="${qrCodeUrl}" />
               <p>SCAN ID</p>
             </div>
-
             <div class="photo-side">
               <div class="photo-container">
                 ${s.photoURL ? `<img src="${s.photoURL}" />` : `<div class="initial-box">${s.name?.charAt(0)}</div>`}
               </div>
             </div>
-
             <div class="info-side">
-              <div class="info-item"><span class="label">NAME</span>: ${s.name}</div>
-              <div class="info-item"><span class="label">ROLL NO</span>: ${s.rollNumber}</div>
+              <div class="info-item"><span class="label">NAME</span>: ${s.name?.toUpperCase()}</div>
+              <div class="info-item"><span class="label">ROLL NO</span>: ${s.rollNumber || "N/A"}</div>
               <div class="info-item"><span class="label">CLASS</span>: ${s.className}</div>
-              <div class="info-item"><span class="label">FATHER</span>: ${s.fatherName}</div>
+              <div class="info-item"><span class="label">FATHER</span>: ${s.fatherName?.toUpperCase()}</div>
               <div class="info-item"><span class="label">PHONE</span>: ${s.phone || "---"}</div>
             </div>
           </div>
-
-          <div class="footer">
-            <span class="session">Session 2024-25</span>
+          <div class="footer-strip">
+            <span class="session">SESSION ${s.session || session}</span>
             <div class="signature">
               <div class="sig-line"></div>
-              Principal Sign
+              PRINCIPAL SIGN
             </div>
           </div>
         </div>
       `;
     });
 
-    const style = `
-      <style>
-        body { margin: 0; padding: 10px; font-family: 'Helvetica', sans-serif; background: #fff; }
-        .print-wrapper { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 15px; }
-        .id-card {
-          width: 330px; height: 210px; border: 1.5px solid #1e3a8a; border-radius: 10px;
-          overflow: hidden; position: relative; background: #fff; margin-bottom: 10px;
-          -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    const style = `<style>
+        @page { size: A4; margin: 0; }
+        body { margin: 0; padding: 10mm; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; }
+        .print-wrapper { 
+          display: grid; 
+          grid-template-columns: 1fr 1fr; 
+          gap: 20px 15px; 
+          justify-items: center; 
         }
-        .header { background: #1e3a8a !important; color: white !important; padding: 8px; display: flex; align-items: center; gap: 8px; height: 45px; }
-        .logo-img { height: 32px; width: 32px; background: white; border-radius: 50%; padding: 2px; }
-        .school-name { font-size: 13px; font-weight: bold; text-transform: uppercase; }
-        .school-address { font-size: 7px; opacity: 0.9; }
-        .card-body { display: flex; padding: 12px; height: 125px; position: relative; padding-top: 15px; }
-        .photo-side { width: 85px; }
-        .photo-container { width: 80px; height: 100px; border: 1px solid #ddd; border-radius: 5px; overflow: hidden; background: #f9f9f9; }
+        .id-card { 
+          width: 86mm; height: 54mm; 
+          border: 1px solid #1e3a8a; 
+          border-radius: 8px; 
+          overflow: hidden; 
+          position: relative; 
+          background: #fff; 
+          box-sizing: border-box; 
+          page-break-inside: avoid; 
+          -webkit-print-color-adjust: exact; 
+        }
+        .header { background: #1e3a8a !important; color: white !important; padding: 6px 10px; display: flex; align-items: center; gap: 8px; height: 50px; }
+        .logo-img { height: 35px; width: 35px; background: white; border-radius: 4px; object-fit: contain; padding: 2px; }
+        .school-name { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        .school-address { font-size: 7px; opacity: 0.9; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .card-body { display: flex; padding: 10px; height: 115px; position: relative; }
+        .photo-container { width: 70px; height: 85px; border: 1.5px solid #1e3a8a; border-radius: 4px; overflow: hidden; background: #f8fafc; }
         .photo-container img { width: 100%; height: 100%; object-fit: cover; }
-        .initial-box { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 35px; color: #1e3a8a; font-weight: bold; background: #eef2ff; }
-        .info-side { flex: 1; padding-left: 10px; font-size: 11px; margin-top: 10px; }
-        .info-item { margin-bottom: 6px; border-bottom: 0.5px solid #f0f0f0; padding-bottom: 2px; font-weight: 600; }
-        .label { color: #1e3a8a; width: 55px; display: inline-block; font-size: 9px; font-weight: 800; }
-        .qr-code-top { position: absolute; top: 10px; right: 12px; text-align: center; }
-        .qr-code-top img { width: 48px; height: 48px; border: 1px solid #eee; padding: 2px; background: #fff; }
-        .qr-code-top p { font-size: 6px; margin: 2px 0 0 0; font-weight: bold; color: #1e3a8a; }
-        .footer { position: absolute; bottom: 0; width: 100%; padding: 5px 12px; display: flex; justify-content: space-between; align-items: flex-end; background: #f8fafc; border-top: 1px solid #eee; box-sizing: border-box; font-size: 9px; }
-        .session { font-weight: bold; color: #1e3a8a; }
-        .signature { text-align: center; font-weight: bold; }
-        .sig-line { width: 70px; border-top: 1px solid #333; margin-bottom: 2px; }
-        @media print { body { padding: 0; } .id-card { box-shadow: none; page-break-inside: avoid; border: 1.5px solid #1e3a8a !important; } .print-wrapper { gap: 10px; } }
-      </style>
-    `;
+        .initial-box { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #1e3a8a; font-weight: bold; background: #f0f7ff; }
+        .info-side { flex: 1; padding-left: 10px; font-size: 10px; z-index: 1; }
+        .info-item { margin-bottom: 4px; border-bottom: 0.5px solid #f1f5f9; padding-bottom: 1px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .label { color: #1e3a8a; width: 55px; display: inline-block; font-size: 8px; font-weight: 800; }
+        .qr-code-top { position: absolute; bottom: 12px; right: 10px; text-align: center; }
+        .qr-code-top img { width: 45px; height: 45px; border: 1px solid #eee; background: white; }
+        .qr-code-top p { font-size: 6px; margin-top: 2px; font-weight: bold; color: #1e3a8a; }
+        .footer-strip { position: absolute; bottom: 0; width: 100%; height: 28px; padding: 0 10px; display: flex; justify-content: space-between; align-items: center; background: #f1f5f9 !important; border-top: 1px solid #e2e8f0; font-size: 8px; box-sizing: border-box; }
+        .session { font-weight: bold; color: #1e3a8a; border: 1px solid #1e3a8a; padding: 1px 4px; border-radius: 3px; }
+        .signature { text-align: center; font-weight: bold; color: #334155; }
+        .sig-line { width: 70px; border-top: 0.8px solid #333; margin-bottom: 2px; }
+    </style>`;
 
     const pri = printFrame.contentWindow;
     pri.document.open();
-    pri.document.write(`<html><head>${style}</head><body><div class="print-wrapper">${cardsHTML}</div></body></html>`);
+    pri.document.write(`<html><head><title>Print ID Cards</title>${style}</head><body><div class="print-wrapper">${cardsHTML}</div></body></html>`);
     pri.document.close();
 
-    // 🟢 Logic: Wait for all images to load before printing
     const images = pri.document.querySelectorAll('img');
-    const promises = Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve();
+    await Promise.all(Array.from(images).map(img => {
       return new Promise(resolve => {
+        if (img.complete) resolve();
         img.onload = resolve;
-        img.onerror = resolve; // Image error ho tab bhi print block na ho
+        img.onerror = resolve; 
       });
-    });
+    }));
 
-    await Promise.all(promises);
-    
-    setIsPrinting(false); // Loading stop
-    pri.focus();
-    pri.print();
+    setTimeout(() => {
+        setIsPrinting(false);
+        pri.focus();
+        pri.print();
+    }, 700);
   };
 
   return (
-    <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "sans-serif", background: "#f5f5f5", minHeight: "100vh" }}>
-      <h1 style={{ color: "#1e3a8a", fontSize: "24px", fontWeight: "bold" }}>Smart ID Card Generator</h1>
+    <div style={{ padding: "40px 20px", textAlign: "center", background: "#f8fafc", minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ maxWidth: "550px", margin: "0 auto", background: "#fff", padding: "30px", borderRadius: "24px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)" }}>
+        <h2 style={{ color: "#1e3a8a", marginBottom: "8px", fontSize: "28px" }}>ID Card Generator</h2>
+        <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "30px" }}>Generate professional ID cards in seconds</p>
 
-      <div style={{ background: "#fff", padding: "30px", borderRadius: "15px", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", display: "inline-block", width: "100%", maxWidth: "420px" }}>
-        {studentId ? (
-            <div style={{ padding: "10px", background: "#e8f5e9", color: "#2e7d32", borderRadius: "8px", marginBottom: "15px", fontWeight: "bold" }}>Single ID Mode Active</div>
-        ) : (
-          <div>
-            <label style={{ display: "block", textAlign: "left", marginBottom: "8px", fontWeight: "bold", color: "#555" }}>Step 1: Select Class</label>
-            <select 
-              value={className} 
-              onChange={(e) => setClassName(e.target.value)}
-              disabled={isPrinting}
-              style={{ padding: "12px", width: "100%", borderRadius: "8px", border: "2px solid #e0e0e0", fontSize: "16px", marginBottom: "20px" }}
-            >
-              {Array.from({ length: 12 }, (_, i) => (
-                <option key={i} value={`Class ${i + 1}`}>Class {i + 1}</option>
-              ))}
-            </select>
+        {!studentId && (
+          <div style={{ display: "flex", gap: "15px", marginBottom: "25px" }}>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <label style={{ fontSize: "12px", fontWeight: "bold", color: "#475569", marginLeft: "5px" }}>Session</label>
+              <select 
+                value={session} 
+                onChange={(e) => setSession(e.target.value)}
+                style={{ padding: "14px", width: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "6px", background: "#f8fafc", outline: "none", fontSize: "15px" }}
+              >
+                {getSessionOptions().map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <label style={{ fontSize: "12px", fontWeight: "bold", color: "#475569", marginLeft: "5px" }}>Class</label>
+              <select 
+                value={className} 
+                onChange={(e) => setClassName(e.target.value)}
+                style={{ padding: "14px", width: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "6px", background: "#f8fafc", outline: "none", fontSize: "15px" }}
+              >
+                {[...Array(12)].map((_, i) => (
+                  <option key={i} value={`Class ${i + 1}`}>Class {i + 1}</option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 
-        <div style={{ marginTop: "10px" }}>
-          <button 
-            onClick={handlePrint}
-            disabled={isPrinting || filteredStudents.length === 0}
-            style={{ 
-              padding: "16px", 
-              background: isPrinting ? "#666" : "#1e3a8a", 
-              color: "#fff",
-              border: "none", 
-              borderRadius: "8px", 
-              cursor: isPrinting ? "not-allowed" : "pointer",
-              fontSize: "16px",
-              fontWeight: "bold",
-              width: "100%",
-              boxShadow: "0 4px 10px rgba(30, 58, 138, 0.3)"
-            }}
-          >
-            {isPrinting ? "⏳ LOADING IMAGES..." : `GENERATE & PRINT (${filteredStudents.length})`}
-          </button>
+        <button 
+          onClick={handlePrint}
+          disabled={isPrinting || students.length === 0}
+          style={{ 
+            padding: "18px", width: "100%", borderRadius: "14px", border: "none",
+            background: isPrinting ? "#94a3b8" : (students.length === 0 ? "#cbd5e1" : "#1e3a8a"), 
+            color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: "16px",
+            transition: "all 0.2s ease",
+            boxShadow: students.length > 0 ? "0 10px 15px -3px rgba(30, 58, 138, 0.3)" : "none"
+          }}
+        >
+          {isPrinting ? "⏳ PREPARING PRINT..." : `GENERATE ${students.length} CARDS`}
+        </button>
+
+        <div style={{ marginTop: "25px", padding: "12px", background: "#f1f5f9", borderRadius: "12px", border: "1px dashed #cbd5e1" }}>
+          <p style={{ margin: 0, fontSize: "13px", color: "#475569" }}>
+            Ready for: <b>{className}</b> • Session: <b>{session}</b>
+          </p>
         </div>
-        <p style={{ marginTop: "15px", color: "#666", fontSize: "14px" }}>
-          Students found: <b>{filteredStudents.length}</b>
-        </p>
       </div>
 
-      <div style={{ marginTop: "40px", color: "#888", fontSize: "13px" }}>
-        <p><b>Note for Mobile:</b> Chrome/Safari mein "Print" option aane par "Save as PDF" select karein.</p>
+      <div style={{ marginTop: "40px", color: "#94a3b8", fontSize: "13px" }}>
+        <p>Tip: Set "Layout" to <b>Portrait</b> and "Margins" to <b>None</b> in print settings.</p>
         <p>© {new Date().getFullYear()} {school.name}</p>
       </div>
     </div>

@@ -1,30 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase'; 
+import React, { useState, useEffect, useRef } from 'react';
+import { db } from '../firebase';
 import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  setDoc, 
-  writeBatch
+  collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch, query, where, getDocs 
 } from 'firebase/firestore';
-import { Save, Edit2, Plus, Clock, Coffee, XCircle, Printer, RefreshCw } from 'lucide-react';
+import { Save, Clock, Printer, RefreshCw, Sparkles, CalendarDays, Timer } from 'lucide-react';
 
 const TimetablePro = () => {
   const [teachers, setTeachers] = useState([]);
-  const [config, setConfig] = useState({ periods: [] });
+  const [periods, setPeriods] = useState([]);
   const [dynamicClasses, setDynamicClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [tempData, setTempData] = useState({});
-  const [tempConfig, setTempConfig] = useState([]);
+  
+  const scrollContainerRef = useRef(null);
+  const lastScrollPos = useRef(0);
+
+  const [selectedSession, setSelectedSession] = useState("2025-26"); 
+  const [showMagicModal, setShowMagicModal] = useState(false);
+  
+  // 🔥 Naya Setup State: Bina purane logic ko distrub kiye
+  const [setup, setSetup] = useState({ 
+    total: 8, 
+    lunchAt: 4, 
+    offAt: 8,
+    startTime: "08:00", // Default Start Time
+    periodDuration: 45,  // Default 45 Mins
+    lunchDuration: 30    // Default 30 Mins
+  });
 
   useEffect(() => {
-    const unsubConfig = onSnapshot(doc(db, "settings", "timetableConfig"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setConfig(data);
-        setTempConfig(data.periods || []);
+    setLoading(true);
+    setPeriods([]); 
+
+    const qPeriods = query(collection(db, "timetablePeriods"), where("session", "==", selectedSession));
+    const unsubPeriods = onSnapshot(qPeriods, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setPeriods(data.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
+      setLoading(false);
+
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollLeft = lastScrollPos.current;
       }
+    });
+
+    const qTeachers = query(collection(db, "teachers"), where("session", "==", selectedSession));
+    const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
+      const activeTeachers = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(t => t.isDeleted !== true); 
+      setTeachers(activeTeachers);
     });
 
     const unsubClasses = onSnapshot(collection(db, "classes"), (snapshot) => {
@@ -32,196 +56,265 @@ const TimetablePro = () => {
       setDynamicClasses(classData.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     });
 
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setTeachers(data);
-      const initialTemp = {};
-      data.forEach(t => { initialTemp[t.id] = { ...t }; });
-      setTempData(initialTemp);
-      setLoading(false);
-    });
+    return () => { unsubPeriods(); unsubTeachers(); unsubClasses(); };
+  }, [selectedSession]);
 
-    return () => { unsubConfig(); unsubClasses(); unsubTeachers(); };
-  }, []);
+  // 🔥 12-Hour Time Calculator (Fix: 12 ke baad 1 bajega)
+  const calculateTime = (index, currentSetup) => {
+    let [hours, minutes] = currentSetup.startTime.split(':').map(Number);
+    let totalMinutes = hours * 60 + minutes;
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleTempUpdate = (tId, field, value) => {
-    setTempData(prev => ({
-      ...prev,
-      [tId]: { ...prev[tId], [field]: value }
-    }));
-  };
-
-  const handleConfigUpdate = (index, field, value) => {
-    const newConfig = [...tempConfig];
-    newConfig[index] = { ...newConfig[index], [field]: value };
-    setTempConfig(newConfig);
-  };
-
-  const deletePeriod = (index) => {
-    if(window.confirm("Delete this period?")) {
-      const newConfig = tempConfig.filter((_, i) => i !== index);
-      setTempConfig(newConfig);
+    for (let i = 1; i < index; i++) {
+      totalMinutes += Number(currentSetup.periodDuration);
+      if (i === Number(currentSetup.lunchAt)) {
+        totalMinutes += Number(currentSetup.lunchDuration);
+      }
     }
+
+    let newHours = Math.floor(totalMinutes / 60);
+    const newMins = totalMinutes % 60;
+    const ampm = newHours >= 12 ? 'PM' : 'AM';
+    
+    newHours = newHours % 12;
+    newHours = newHours ? newHours : 12; // 0 ko 12 mein badle
+    
+    return `${newHours}:${newMins.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  const saveAllChanges = async () => {
+  const startMagicGeneration = () => {
+    if (!window.confirm(`Generate for ${selectedSession}?`)) return;
+    const newGeneratedPeriods = [];
+    for (let i = 1; i <= setup.total; i++) {
+      let label = `P${i}`;
+      let type = 'class';
+      let periodInternalName = label; 
+      let time = calculateTime(i, setup); // 🔥 Ab time dynamic calculate hoga
+
+      if (i === Number(setup.lunchAt)) { 
+        type = 'break'; 
+        periodInternalName = 'LUNCH'; 
+      } else if (i === Number(setup.offAt)) { 
+        type = 'off'; 
+        periodInternalName = 'OFF'; 
+      }
+
+      const updatedAssignments = {
+        periodName: periodInternalName
+      };
+
+      if (type === 'class') {
+        let currentPeriodClasses = [...dynamicClasses]; 
+        currentPeriodClasses.sort(() => Math.random() - 0.5);
+        teachers.forEach((teacher) => {
+          if (currentPeriodClasses.length > 0) { updatedAssignments[teacher.id] = currentPeriodClasses.pop(); }
+          else { updatedAssignments[teacher.id] = "FREE"; }
+        });
+      }
+
+      newGeneratedPeriods.push({
+        id: `period_${selectedSession.replace('-', '_')}_${i}`, 
+        label, time, type, session: selectedSession, teacherAssignments: updatedAssignments
+      });
+    }
+    setPeriods(newGeneratedPeriods);
+    setIsEditing(true);
+    setShowMagicModal(false);
+  };
+
+  const saveAll = async () => {
+    if (scrollContainerRef.current) { lastScrollPos.current = scrollContainerRef.current.scrollLeft; }
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      Object.keys(tempData).forEach(tId => {
-        const teacherRef = doc(db, "teachers", tId);
-        batch.set(teacherRef, tempData[tId], { merge: true });
+      periods.forEach(p => {
+        const ref = doc(db, "timetablePeriods", p.id);
+        batch.set(ref, { ...p, session: selectedSession }, { merge: true });
       });
-      const configRef = doc(db, "settings", "timetableConfig");
-      batch.set(configRef, { periods: tempConfig }, { merge: true });
       await batch.commit();
       setIsEditing(false);
-      alert("Timetable Saved!");
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
-    }
+      setTimeout(() => { if (scrollContainerRef.current) scrollContainerRef.current.scrollLeft = lastScrollPos.current; }, 50);
+      alert(`Saved Successfully!`);
+    } catch (err) { alert("Error: " + err.message); }
+    finally { setLoading(false); }
   };
 
-  const addPeriod = () => {
-    const newBel = { id: `bel${Date.now()}`, label: `P${tempConfig.length + 1}`, time: "10:00 AM", type: 'class' };
-    setTempConfig([...tempConfig, newBel]);
+  const handleAssignmentChange = (periodId, teacherId, className) => {
+    if (scrollContainerRef.current) { lastScrollPos.current = scrollContainerRef.current.scrollLeft; }
+    setPeriods(prev => prev.map(p => {
+      if (p.id === periodId) {
+        const updatedAssignments = { 
+          ...(p.teacherAssignments || {}), 
+          [teacherId]: className
+        };
+        return { ...p, teacherAssignments: updatedAssignments };
+      }
+      return p;
+    }));
     if(!isEditing) setIsEditing(true);
   };
 
-  const addLunch = () => {
-    const lunch = { id: `lunch${Date.now()}`, label: `LUNCH`, time: "12:30 PM", type: 'break' };
-    setTempConfig([...tempConfig, lunch]);
-    if(!isEditing) setIsEditing(true);
-  };
-
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-900 text-white">
-      <RefreshCw className="animate-spin mr-2" /> Loading...
-    </div>
-  );
+  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-900 text-white flex-col gap-4 italic uppercase tracking-widest"><RefreshCw className="animate-spin text-indigo-500" size={40} /> Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9] p-2 md:p-6 printable-area">
+    <div className="min-h-screen bg-[#f8fafc] p-4 printable-area text-slate-800">
       
-      {/* ⚠️ CRITICAL PRINT CSS: Isse hi white screen theek hogi */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          /* 1. Hide everything except the timetable */
-          body * { visibility: hidden !important; }
-          .printable-area, .printable-area * { visibility: visible !important; }
-          
-          /* 2. Reset positions so it doesn't print a blank page */
-          .printable-area { 
+          @page { size: A4 landscape; margin: 10mm; }
+          #print-area { 
             position: absolute !important; 
             left: 0 !important; 
             top: 0 !important; 
             width: 100% !important; 
-            margin: 0 !important; 
-            padding: 0 !important;
-            background: white !important;
+            transform: none !important; 
+            box-shadow: none !important; 
+            border: none !important; 
           }
-
-          /* 3. Page Setup */
-          @page { size: landscape; margin: 10mm; }
-          
-          /* 4. Table Styling */
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { border: 1px solid black !important; padding: 4px !important; font-size: 10px !important; text-align: center !important; }
           .no-print { display: none !important; }
-          .active-class { font-weight: bold !important; color: black !important; }
+          
+          table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+          th, td { 
+            padding: 8px 4px !important; 
+            border: 0.5px solid #000 !important; 
+          }
+          
+          .teacher-name { font-size: 12px !important; font-weight: 900 !important; }
+          .teacher-sub { font-size: 9px !important; }
+          .period-label { font-size: 12px !important; }
+          .period-time { font-size: 9px !important; }
+          
+          .sticky { position: static !important; }
+          .overflow-x-auto { overflow: visible !important; width: 100% !important; }
         }
       `}} />
 
-      <div className="max-w-[1600px] mx-auto bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200">
-        
-        {/* DASHBOARD HEADER (No Print) */}
-        <div className="bg-slate-900 p-5 flex justify-between items-center no-print">
-          <div className="flex items-center gap-3">
-            <Clock className="text-indigo-400" />
-            <h1 className="text-white font-bold">Master Timetable</h1>
+      {showMagicModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2000] flex items-center justify-center p-4 no-print">
+          <div className="bg-white p-6 max-w-md w-full shadow-2xl rounded-3xl">
+            <h2 className="text-lg font-black uppercase mb-4 flex items-center gap-2">
+              <Timer className="text-indigo-600" /> Setup Timetable
+            </h2>
+            <div className="space-y-4">
+              {/* Row 1: Start Time & Total */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start Time</label>
+                  <input type="time" value={setup.startTime} onChange={(e) => setSetup({...setup, startTime: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border border-slate-100" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Total Periods</label>
+                  <input type="number" value={setup.total} onChange={(e) => setSetup({...setup, total: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border border-slate-100" />
+                </div>
+              </div>
+
+              {/* Row 2: Durations */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-indigo-400 uppercase ml-1">Period (Min)</label>
+                  <input type="number" value={setup.periodDuration} onChange={(e) => setSetup({...setup, periodDuration: e.target.value})} className="w-full p-3 bg-indigo-50/50 rounded-xl font-bold outline-none text-indigo-700 border border-indigo-100" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-orange-400 uppercase ml-1">Lunch (Min)</label>
+                  <input type="number" value={setup.lunchDuration} onChange={(e) => setSetup({...setup, lunchDuration: e.target.value})} className="w-full p-3 bg-orange-50/50 rounded-xl font-bold outline-none text-orange-700 border border-orange-100" />
+                </div>
+              </div>
+
+              {/* Row 3: Lunch/Off Position */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Lunch At (P#)</label>
+                   <input type="number" value={setup.lunchAt} onChange={(e) => setSetup({...setup, lunchAt: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border border-slate-100 text-orange-700" />
+                </div>
+                <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Off At (P#)</label>
+                   <input type="number" value={setup.offAt} onChange={(e) => setSetup({...setup, offAt: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border border-slate-100 text-red-700" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setShowMagicModal(false)} className="flex-1 py-3 font-black text-xs uppercase text-slate-400">Cancel</button>
+              <button onClick={startMagicGeneration} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase shadow-lg shadow-indigo-200">Magic Fill</button>
+            </div>
           </div>
-          <div className="flex gap-2">
+        </div>
+      )}
+
+      <div id="print-area" className="w-full mx-auto bg-white shadow-2xl  overflow-hidden border border-slate-200">
+        <div className="bg-slate-900 p-5 flex justify-between items-center no-print">
+          <div className="flex items-center gap-4">
+            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><Clock size={24}/></div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarDays size={14} className="text-indigo-400"/>
+                <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} className="bg-transparent text-indigo-400 font-black text-[11px] uppercase outline-none cursor-pointer">
+                  <option value="2024-25" className="text-slate-900">2024-25</option>
+                  <option value="2025-26" className="text-slate-900">2025-26</option>
+                  <option value="2026-27" className="text-slate-900">2026-27</option>
+                </select>
+              </div>
+              <h1 className="text-white font-black text-lg tracking-widest uppercase leading-none">Master Schedule</h1>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
             {!isEditing ? (
               <>
-                <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-800 px-4 py-2 rounded-lg font-bold">
-                  <Printer size={18} /> Print Now
-                </button>
-                <button onClick={() => setIsEditing(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">
-                  Edit
-                </button>
-                <button onClick={addPeriod} className="p-2 bg-slate-700 text-white rounded-lg"><Plus size={20}/></button>
-                <button onClick={addLunch} className="p-2 bg-orange-600 text-white rounded-lg"><Coffee size={20}/></button>
+                <button onClick={() => setShowMagicModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-2xl font-black text-xs uppercase flex items-center gap-2 shadow-lg"><Sparkles size={16}/> Magic Setup</button>
+                <button onClick={() => window.print()} className="bg-white/10 text-white px-5 py-2.5 rounded-2xl font-black text-xs border border-white/20 flex items-center gap-2"><Printer size={16}/> Print</button>
               </>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => setIsEditing(false)} className="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold">Cancel</button>
-                <button onClick={saveAllChanges} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold">Save Changes</button>
+                <button onClick={() => window.location.reload()} className="bg-slate-700 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase">Discard</button>
+                <button onClick={saveAll} className="bg-emerald-500 text-white px-8 py-2.5 rounded-2xl font-black text-xs uppercase shadow-lg flex items-center gap-2"><Save size={16}/> Save Master Data</button>
               </div>
             )}
           </div>
         </div>
 
-        {/* PRINT ONLY HEADER */}
-        <div className="hidden print:block text-center p-4 border-b-2 border-black">
-           <h1 className="text-2xl font-bold uppercase">SUNSHINE PUBLIC SCHOOL</h1>
-           <p className="font-bold uppercase tracking-widest">Master Timetable (2025-26)</p>
-        </div>
-
-        {/* MAIN TABLE */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto" ref={scrollContainerRef}>
+          <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="p-3 border sticky left-0 bg-slate-100 z-10 w-[150px]">Staff Member</th>
-                {tempConfig.map((p, idx) => (
-                  <th key={p.id} className="p-3 border min-w-[100px] relative">
-                    {isEditing ? (
-                      <div className="no-print flex flex-col gap-1">
-                        <button onClick={() => deletePeriod(idx)} className="text-red-500 absolute -top-1 -right-1"><XCircle size={14}/></button>
-                        <input className="text-center border rounded p-0.5 text-xs" value={p.label} onChange={(e) => handleConfigUpdate(idx, 'label', e.target.value)} />
-                        <input className="text-center border rounded p-0.5 text-[10px]" value={p.time} onChange={(e) => handleConfigUpdate(idx, 'time', e.target.value)} />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col">
-                        <span className="font-bold text-xs uppercase">{p.label}</span>
-                        <span className="text-indigo-600 text-[10px]">{p.time}</span>
-                      </div>
-                    )}
+              <tr className="bg-slate-50 border-b-2 border-slate-200">
+                <th className="p-5 border sticky left-0 bg-slate-50 z-20 w-[240px] text-left">
+                  <span className="text-[10px] font-black uppercase text-slate-400 italic">Faculty ({teachers.length})</span>
+                </th>
+                {periods.map((p) => (
+                  <th key={p.id} className={`p-4 border min-w-[150px] ${p.type === 'break' ? 'bg-orange-50/50' : p.type === 'off' ? 'bg-red-50/50' : ''}`}>
+                    <div className="flex flex-col items-center">
+                      <span className="font-black text-[14px] uppercase text-slate-800 leading-none">
+                        {p.label}
+                      </span>
+                      <span className="text-[10px] font-bold text-indigo-500 mt-1">{p.time}</span>
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {teachers.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50">
-                  <td className="p-3 border sticky left-0 bg-white font-bold text-xs">
-                    {t.name} <br/>
-                    <span className="text-[9px] text-indigo-500">{t.subject}</span>
+                <tr key={t.id} className="hover:bg-indigo-50/20 border-b">
+                  <td className="p-5 border sticky left-0 bg-white z-10 shadow-sm">
+                    <p className="font-black text-[14px] text-slate-800 uppercase leading-none mb-1">{t.name}</p>
+                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{t.subject}</p>
                   </td>
-                  {tempConfig.map((p) => (
-                    <td key={p.id} className={`p-2 border text-center ${p.type === 'break' ? 'bg-orange-50' : ''}`}>
-                      {p.type === 'break' ? <span className="text-[9px] font-bold">LUNCH</span> : (
-                        isEditing ? (
-                          <select 
-                            className="w-full text-xs border rounded p-1 no-print"
-                            value={tempData[t.id]?.[p.id] || ""}
-                            onChange={(e) => handleTempUpdate(t.id, p.id, e.target.value)}
-                          >
-                            <option value="">-</option>
-                            <option value="Free">Free</option>
-                            {dynamicClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        ) : (
-                          <span className={`text-[11px] font-bold ${t[p.id] === 'Free' ? 'text-slate-300' : 'active-class'}`}>
-                            {t[p.id] || "—"}
-                          </span>
-                        )
+                  
+                  {periods.map((p) => (
+                    <td key={p.id} className={`p-4 border text-center transition-all ${p.type === 'break' ? 'bg-orange-50/30' : p.type === 'off' ? 'bg-red-50/30' : ''}`}>
+                      {p.type === 'break' ? (
+                        <span className="text-[11px] font-black text-orange-700 uppercase bg-orange-100 px-3 py-1.5 rounded-xl">LUNCH</span>
+                      ) : p.type === 'off' ? (
+                        <span className="text-[11px] font-black text-red-700 uppercase bg-red-100 px-3 py-1.5 rounded-xl">OFF</span>
+                      ) : (
+                        <select 
+                          className={`w-full text-center text-[13px] font-black bg-transparent outline-none cursor-pointer ${p.teacherAssignments?.[t.id] && p.teacherAssignments[t.id] !== "FREE" ? 'text-indigo-700' : 'text-slate-300 italic'}`}
+                          value={p.teacherAssignments?.[t.id] || ""}
+                          onChange={(e) => handleAssignmentChange(p.id, t.id, e.target.value)}
+                        >
+                          <option value="">—</option>
+                          <option value="FREE">FREE</option>
+                          {dynamicClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                       )}
                     </td>
                   ))}
@@ -232,9 +325,16 @@ const TimetablePro = () => {
         </div>
       </div>
       
-      <p className="text-[10px] text-slate-400 mt-2 no-print">
-        Tip: Print preview khali dikhe toh layout 'Landscape' karein.
-      </p>
+      {!isEditing && (
+        <div className="mt-6 flex justify-center no-print">
+            <div className="bg-white px-6 py-3 rounded-full border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                    <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-widest">{teachers.length} Faculty Found</span>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };

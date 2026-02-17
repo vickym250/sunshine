@@ -1,41 +1,75 @@
 import React, { useEffect, useState } from "react";
-import { addDoc, updateDoc, doc, collection } from "firebase/firestore";
+import { addDoc, updateDoc, doc, collection, getDoc } from "firebase/firestore";
 import { db, storage } from "../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import toast from "react-hot-toast";
+
+// 📅 Auto Session Calculate Function
+const calculateSession = () => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const month = now.getMonth() + 1; 
+  if (month >= 4) {
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else {
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
 
 const monthsOrder = [
   "April", "May", "June", "July", "August", "September",
   "October", "November", "December", "January", "February", "March"
 ];
 
-const classes = [
-  "Class 1","Class 2","Class 3","Class 4","Class 5","Class 6",
-  "Class 7","Class 8","Class 9","Class 10","Class 11","Class 12",
-];
-
 export function AddTeacherPopup({ close, editData }) {
   const [form, setForm] = useState({
     name: "",
+    role: "Teacher", // ✨ Naya Field
+    otherRole: "",   // ✨ Naya Field (Custom entry ke liye)
     subject: "",
-    phone: "", // 📱 Sirf phone number hi login ke liye kaafi hai
+    phone: "",
     salary: "",
     address: "",
+    session: calculateSession(), // ✨ Auto Set
+    joiningDate: new Date().toISOString().split("T")[0], // ✨ Auto Date
     photo: null,
     photoURL: "",
     isClassTeacher: false,
     classTeacherOf: "",
   });
 
+  // 🆕 Dynamic States from Firestore
+  const [masterData, setMasterData] = useState(null);
+  const [classList, setClassList] = useState([]);
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // 🚀 Fetching Master Data from school_config/master_data
   useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        const docRef = doc(db, "school_config", "master_data");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data().mapping; // Screenshot ke hisaab se 'mapping' field
+          setMasterData(data);
+          setClassList(Object.keys(data)); // Sari classes nikal li
+        }
+      } catch (err) {
+        console.error("Master data fetch error:", err);
+        toast.error("Classes load nahi ho payi!");
+      }
+    };
+
+    fetchMasterData();
+
     if (editData) {
       setForm((s) => ({
         ...s,
         ...editData,
+        role: editData.role || "Teacher",
         salary: editData.salary || "",
+        joiningDate: editData.joiningDate || new Date().toISOString().split("T")[0],
         isClassTeacher: editData.isClassTeacher || false,
         classTeacherOf: editData.classTeacherOf || "",
         photo: null,
@@ -69,7 +103,6 @@ export function AddTeacherPopup({ close, editData }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation: Phone number must be 10 digits
     if (form.phone.length !== 10) {
       toast.error("Phone number 10 digits ka hona chahiye!");
       return;
@@ -85,20 +118,26 @@ export function AddTeacherPopup({ close, editData }) {
         photoURL = await getDownloadURL(imageRef);
       }
 
+      // Final Role Decide karna (Other select kiya hai ya Dropdown se)
+      const finalRole = form.role === "Other" ? form.otherRole : form.role;
+
       const teacherData = {
         name: form.name,
-        subject: form.subject,
-        phone: form.phone, // Ye login key hai
+        role: finalRole, // ✨ Database me role jayega
+        subject: form.role === "Teacher" ? form.subject : "N/A",
+        phone: form.phone,
         salary: Number(form.salary),
         address: form.address,
+        session: form.session,
+        joiningDate: form.joiningDate,
         photoURL,
-        isClassTeacher: form.isClassTeacher,
-        classTeacherOf: form.isClassTeacher ? form.classTeacherOf : null,
+        isClassTeacher: form.role === "Teacher" ? form.isClassTeacher : false,
+        classTeacherOf: (form.role === "Teacher" && form.isClassTeacher) ? form.classTeacherOf : null,
       };
 
       if (editData) {
         await updateDoc(doc(db, "teachers", editData.id), teacherData);
-        toast.success("Teacher data updated!");
+        toast.success("Staff data updated!");
       } else {
         await addDoc(collection(db, "teachers"), {
           ...teacherData,
@@ -106,7 +145,7 @@ export function AddTeacherPopup({ close, editData }) {
           attendance: {},
           createdAt: new Date(),
         });
-        toast.success("Teacher added successfully!");
+        toast.success("Staff added successfully!");
       }
       handleClose();
     } catch (err) {
@@ -127,9 +166,9 @@ export function AddTeacherPopup({ close, editData }) {
         <div className="bg-indigo-600 p-5 flex justify-between items-center text-white">
           <div>
             <h2 className="text-xl font-bold italic">
-              {editData ? "Edit Teacher" : "Register Teacher"}
+              {editData ? "Edit Staff Info" : "Register Staff"}
             </h2>
-            <p className="text-xs opacity-80">Phone number se hi teacher login kar payenge</p>
+            <p className="text-xs opacity-80">Academic Session: {form.session}</p>
           </div>
           <button onClick={handleClose} className="hover:rotate-90 transition-transform text-2xl">
             &times;
@@ -137,6 +176,7 @@ export function AddTeacherPopup({ close, editData }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Name */}
             <div>
@@ -146,15 +186,44 @@ export function AddTeacherPopup({ close, editData }) {
                 className="w-full border-b-2 border-gray-100 focus:border-indigo-500 outline-none py-2 transition-colors" />
             </div>
 
-            {/* Subject */}
+            {/* ✨ Naya Field: Staff Type Dropdown */}
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Subject</label>
-              <input name="subject" value={form.subject} onChange={handleChange} required
-                placeholder="Ex: Mathematics"
-                className="w-full border-b-2 border-gray-100 focus:border-indigo-500 outline-none py-2 transition-colors" />
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Staff Type (Role)</label>
+              <select name="role" value={form.role} onChange={handleChange} required
+                className="w-full border-b-2 border-gray-100 focus:border-indigo-500 outline-none py-2 bg-white">
+                <option value="Teacher">Teacher</option>
+                <option value="Peon">Peon</option>
+                <option value="Driver">Driver</option>
+                <option value="Guard">Security Guard</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
 
-            {/* Phone - MANDATORY */}
+            {/* ✨ Naya Field: Custom Role Input (Jab 'Other' chuna ho) */}
+            {form.role === "Other" && (
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold text-orange-500 uppercase tracking-wider">Specify Your Role</label>
+                <input name="otherRole" value={form.otherRole} onChange={handleChange} required
+                  placeholder="Ex: Sweeper, Accountant, etc."
+                  className="w-full border-b-2 border-orange-200 focus:border-orange-500 outline-none py-2" />
+              </div>
+            )}
+
+            {/* Dynamic Subject - Only for Teachers */}
+            {form.role === "Teacher" && (
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Subject</label>
+                <select name="subject" value={form.subject} onChange={handleChange} required
+                  className="w-full border-b-2 border-gray-100 focus:border-indigo-500 outline-none py-2 transition-colors bg-white">
+                  <option value="">Select Subject</option>
+                  {masterData && [...new Set(Object.values(masterData).flat())].sort().map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Phone */}
             <div className="md:col-span-2 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
               <label className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Mobile Number (Login ID)</label>
               <div className="flex items-center gap-2">
@@ -165,8 +234,15 @@ export function AddTeacherPopup({ close, editData }) {
               </div>
             </div>
 
+            {/* Joining Date */}
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Joining Date</label>
+              <input name="joiningDate" type="date" value={form.joiningDate} onChange={handleChange} required
+                className="w-full border-b-2 border-gray-100 focus:border-indigo-500 outline-none py-2 transition-colors" />
+            </div>
+
             {/* Salary */}
-            <div className="md:col-span-2">
+            <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Monthly Salary (₹)</label>
               <input name="salary" type="number" value={form.salary} onChange={handleChange} required
                 placeholder="50000"
@@ -174,46 +250,47 @@ export function AddTeacherPopup({ close, editData }) {
             </div>
           </div>
 
-          {/* Class Teacher Section */}
-          <div className="bg-gray-50 p-4 rounded-xl space-y-3">
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="isCT" className="w-5 h-5 accent-indigo-600" checked={form.isClassTeacher} onChange={handleCheckbox} />
-              <label htmlFor="isCT" className="font-bold text-gray-700 cursor-pointer">Is this a Class Teacher?</label>
+          {/* Class Teacher Section - Only for Teachers */}
+          {form.role === "Teacher" && (
+            <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="isCT" className="w-5 h-5 accent-indigo-600" checked={form.isClassTeacher} onChange={handleCheckbox} />
+                <label htmlFor="isCT" className="font-bold text-gray-700 cursor-pointer">Is this a Class Teacher?</label>
+              </div>
+              {form.isClassTeacher && (
+                <select name="classTeacherOf" value={form.classTeacherOf} onChange={handleChange} required
+                  className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 ring-indigo-300">
+                  <option value="">Select assigned class</option>
+                  {classList.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
-            {form.isClassTeacher && (
-              <select name="classTeacherOf" value={form.classTeacherOf} onChange={handleChange} required
-                className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 ring-indigo-300">
-                <option value="">Select assigned class</option>
-                {classes.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+          )}
+
+          {/* Address */}
+          <div>
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address</label>
+            <textarea name="address" value={form.address} onChange={handleChange} rows="2"
+              className="w-full border border-gray-200 rounded-xl p-3 mt-1 focus:ring-2 ring-indigo-200 outline-none text-sm" />
+          </div>
+
+          {/* Photo */}
+          <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl">
+            <div className="flex-1">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Photo</label>
+              <input type="file" accept="image/*" onChange={handlePhoto} className="w-full text-xs mt-1" />
+            </div>
+            {(form.photoURL || form.photo) && (
+                <img 
+                src={form.photo ? URL.createObjectURL(form.photo) : form.photoURL} 
+                className="w-14 h-14 rounded-lg object-cover border-2 border-white shadow-sm" 
+                alt="preview" 
+                />
             )}
           </div>
 
-          {/* Photo & Address */}
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address</label>
-              <textarea name="address" value={form.address} onChange={handleChange} rows="2"
-                className="w-full border border-gray-200 rounded-xl p-3 mt-1 focus:ring-2 ring-indigo-200 outline-none text-sm" />
-            </div>
-
-            <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl">
-              <div className="flex-1">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Photo</label>
-                <input type="file" accept="image/*" onChange={handlePhoto} className="w-full text-xs mt-1" />
-              </div>
-              {(form.photoURL || form.photo) && (
-                 <img 
-                  src={form.photo ? URL.createObjectURL(form.photo) : form.photoURL} 
-                  className="w-14 h-14 rounded-lg object-cover border-2 border-white shadow-sm" 
-                  alt="preview" 
-                 />
-              )}
-            </div>
-          </div>
-
-          <button disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-100 transition-all flex justify-center items-center gap-2">
-            {loading ? "Saving Details..." : editData ? "Update Teacher Profile" : "Confirm & Register"}
+          <button disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center gap-2">
+            {loading ? "Saving Details..." : editData ? "Update Staff Profile" : "Confirm & Register"}
           </button>
         </form>
       </div>
