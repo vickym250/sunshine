@@ -75,7 +75,7 @@ export default function Login() {
   {/* School Name with Gradient Typography */}
   <div className="space-y-1">
     <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-      BRIGHT FUTURE
+      Edu-tech
     </h1>
     <h2 className="text-lg md:text-xl font-bold text-indigo-400 tracking-[0.2em] uppercase">
       School

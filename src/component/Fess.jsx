@@ -1,274 +1,254 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { db } from "../firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+import QRCode from "react-qr-code";
+import { Loader2 } from "lucide-react";
 
-export default function MarksSheet() {
-  const { studentId, session } = useParams();
+export default function FeesReceipt({
+  studentId,
+  name = "",
+  studentClass = "",
+  allCharges = [],
+  studentWiseBreakdown = [],
+  extraCharges = [],
+  payMonth = "",
+  paidAt,
+  oldBalance = 0,
+  currentTotal = 0,
+  netPayable = 0,
+  received = 0,
+  discount = 0, // Naya Prop: Discount receive karne ke liye
+  balance = 0,
+  onClose,
+}) {
   const [loading, setLoading] = useState(true);
-  const [classResults, setClassResults] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  
-  // Dynamic School State (Firebase se aayega)
   const [school, setSchool] = useState({
-    name: "Loading...",
-    address: "",
-    phone: "",
-    website: "",
-    logoUrl: ""
+    name: "Dr. A.P.J. Abdul Kalam Memorial Kid's Academy",
+    address: "Barhni (Opp. Cold Storage), Post- Kathowtiya Alam, Dumariyaganj, Siddharth Nagar- 272189",
+    phone: "9918488912",
+    website: "https://drapjacademy.in",
+    logoUrl: "https://drapjacademy.in/logo.png"
   });
 
-  const TABLE_ROWS_COUNT = 10;
-
-  const normalize = (str = "") => str.toLowerCase().replace(/[^a-z]/g, "");
-
-  const getRow = (exam, subject) =>
-    exam?.rows?.find(
-      (r) =>
-        normalize(r.subject).includes(normalize(subject)) ||
-        normalize(subject).includes(normalize(r.subject))
-    ) || { total: 0, marks: 0 };
-
-  // --- FETCH SCHOOL INFO & SUBJECT MAPPING ---
-  const fetchConfig = async (className) => {
-    try {
-      const docRef = doc(db, "school_config", "master_data");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // School Info dynamic set ho rahi hai
-        if (data.schoolInfo) {
-          setSchool(data.schoolInfo);
-        }
-        // Subjects mapping
-        const mapping = data.mapping || {};
-        setSubjects(mapping[className] || []);
-      }
-    } catch (err) {
-      console.error("Config fetch error:", err);
-    }
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      if (studentId?.toLowerCase().startsWith("class")) {
-        const className = studentId.toLowerCase().replace("class", "Class ");
-        await fetchConfig(className); // Fetch school & subjects
-
-        const qs = query(
-          collection(db, "students"),
-          where("className", "==", className)
-        );
-        const stuSnap = await getDocs(qs);
-        const students = stuSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-        const all = [];
-        for (const stu of students) {
-          const qr = query(
-            collection(db, "examResults"),
-            where("studentId", "==", stu.id),
-            where("session", "==", session)
-          );
-          const rs = await getDocs(qr);
-          const results = rs.docs.map((d) => d.data());
-          const h = results.find((r) => r.exam === "Half-Yearly");
-          const a = results.find((r) => r.exam === "Annual");
-          if (h || a) all.push({ student: stu, half: h, annual: a });
-        }
-        setClassResults(all);
-      } else {
-        // Single Student Case
-        const stuRef = doc(db, "students", studentId);
-        const stuSnap = await getDoc(stuRef);
-
-        if (stuSnap.exists()) {
-          const stu = stuSnap.data();
-          await fetchConfig(stu.className);
-
-          const qr = query(
-            collection(db, "examResults"),
-            where("studentId", "==", studentId),
-            where("session", "==", session)
-          );
-          const rs = await getDocs(qr);
-          const results = rs.docs.map((d) => d.data());
-
-          const h = results.find((r) => r.exam === "Half-Yearly");
-          const a = results.find((r) => r.exam === "Annual");
-          setClassResults([{ student: { id: studentId, ...stu }, half: h, annual: a }]);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading data:", error);
-    }
-    setLoading(false);
-  };
+  const [studentDetails, setStudentDetails] = useState(null);
 
   useEffect(() => {
-    loadData();
-  }, [studentId, session]);
+    const fetchInfo = async () => {
+      setLoading(true);
+      try {
+        const schSnap = await getDoc(doc(db, "settings", "schoolDetails"));
+        if (schSnap.exists()) setSchool(prev => ({ ...prev, ...schSnap.data() }));
 
-  const handlePrint = () => {
-    const content = document.getElementById("marksheet-content").innerHTML;
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${school.name} - Report Card</title>
-          <script src="https://cdn.tailwindcss.com"></script>
-          <style>
-            @page { size: A4 portrait; margin: 0; }
-            body { font-family: 'Segoe UI', sans-serif; -webkit-print-color-adjust: exact; }
-            .main-border { border: 4px double #1e3a8a; }
-            table td, table th { border: 1px solid #1e3a8a !important; padding: 5px !important; }
-            .page-break { page-break-after: always; }
-          </style>
-        </head>
-        <body onload="window.print(); window.close();">
-          <div class="p-2">${content}</div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
+        if (studentId) {
+          const stuSnap = await getDoc(doc(db, "students", studentId));
+          if (stuSnap.exists()) setStudentDetails(stuSnap.data());
+        }
+      } catch (err) { 
+        console.error("Receipt Fetch Error:", err); 
+      } finally {
+        setTimeout(() => setLoading(false), 500);
+      }
+    };
+    fetchInfo();
+  }, [studentId]);
 
-  if (loading) return <div className="p-20 text-center font-bold animate-pulse text-blue-900">Loading Report Cards...</div>;
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[2000] flex items-center justify-center">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-blue-600" size={48} />
+          <p className="font-black text-slate-700 uppercase tracking-widest text-sm">Generating Receipt...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const date = paidAt ? new Date(paidAt).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB");
+
+  const displayData = studentWiseBreakdown.length > 0 
+    ? studentWiseBreakdown 
+    : [{ studentName: name || studentDetails?.name, className: studentClass || studentDetails?.className, items: allCharges }];
+
+  const allStudentNames = displayData.map(s => s.studentName).join(", ");
+  const isFamily = displayData.length > 1;
 
   return (
-    <div className="bg-slate-600 min-h-screen p-5 print:bg-white print:p-0">
-      <div id="marksheet-content" className="flex flex-col items-center">
-        {classResults.map((item) => {
-          const { student, half, annual } = item;
-          const getMarks = (sub) => {
-            const h = getRow(half, sub);
-            const a = getRow(annual, sub);
-            return { hM: Number(h.total)||0, hO: Number(h.marks)||0, aM: Number(a.total)||0, aO: Number(a.marks)||0 };
-          };
+    <div className="fixed inset-0 bg-gray-900/90 z-[1000] p-4 overflow-y-auto font-sans">
+      <div className="no-print bg-white max-w-[210mm] mx-auto p-3 flex justify-between items-center mb-4 rounded shadow-lg border-b-4 border-blue-600">
+        <button onClick={onClose} className="bg-red-500 hover:bg-red-600 text-white px-6 py-1.5 rounded-full font-bold uppercase text-sm transition-colors">Close</button>
+        <div className="text-center">
+            <h2 className="font-black text-blue-800 tracking-tighter">FEES RECEIPT PREVIEW</h2>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">A4 Portrait Mode</p>
+        </div>
+        <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-1.5 rounded-full font-bold shadow-lg text-sm transition-transform active:scale-95">PRINT NOW</button>
+      </div>
 
-          const tHM = subjects.reduce((acc, s) => acc + getMarks(s).hM, 0);
-          const tHO = subjects.reduce((acc, s) => acc + getMarks(s).hO, 0);
-          const tAM = subjects.reduce((acc, s) => acc + getMarks(s).aM, 0);
-          const tAO = subjects.reduce((acc, s) => acc + getMarks(s).aO, 0);
-          const gTotalO = tHO + tAO;
-          const gTotalM = tHM + tAM;
-          const perc = gTotalM ? ((gTotalO / gTotalM) * 100).toFixed(2) : 0;
+      <div id="print-area" className="w-[210mm] mx-auto bg-white p-[10mm] min-h-[297mm] shadow-2xl">
+        <div className="border-[2px] border-black p-4 flex flex-col relative bg-white min-h-[145mm]">
+          
+          {/* HEADER SECTION */}
+          <div className="flex items-center justify-between border-b-[1px] border-black pb-2 mb-2">
+            <div className="w-20 h-20 border-[1px] border-slate-200 rounded-xl overflow-hidden flex items-center justify-center bg-slate-50">
+               {school.logoUrl ? (
+                 <img src={school.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+               ) : (
+                 <div className="text-[10px] font-bold text-slate-300">LOGO</div>
+               )}
+            </div>
+            
+            <div className="flex-1 text-center px-4">
+              <h1 className="text-[28px] font-black text-red-600 italic tracking-tighter uppercase leading-none mb-1">{school.name}</h1>
+              <p className="text-blue-700 font-bold text-sm lowercase mb-1 underline decoration-blue-200">{school.website}</p>
+              <p className="text-[10px] font-bold text-gray-800 leading-tight uppercase max-w-md mx-auto">{school.address}</p>
+            </div>
 
-          return (
-            <div key={student.id} className="page-break bg-white w-[210mm] h-[297mm] p-[10mm] mb-10 shadow-2xl box-border">
-              <div className="main-border h-full w-full p-6 flex flex-col">
-                
-                {/* Dynamic Header */}
-                <div className="flex items-center border-b-2 border-blue-900 pb-4 mb-4">
-                  <img src={school.logoUrl} alt="Logo" className="w-20 h-20 object-contain" />
-                  <div className="flex-grow text-center">
-                    <h1 className="text-2xl font-black text-blue-900 uppercase">{school.name}</h1>
-                    <p className="text-[10px] text-gray-600 font-bold px-4">{school.address}</p>
-                    <p className="text-[11px] text-blue-800 font-bold">Mo: {school.phone} | {school.website}</p>
-                    <span className="bg-blue-900 text-white px-4 py-1 rounded-full text-[10px] mt-2 inline-block">SESSION: {session}</span>
-                  </div>
-                </div>
-
-                {/* Student Details */}
-                <div className="flex justify-between mb-4 text-blue-900">
-                  <div className="flex-grow space-y-1 text-sm font-bold">
-                    <p className="border-b border-blue-100 pb-1">NAME: <span className="text-black uppercase ml-2">{student.name}</span></p>
-                    <p className="border-b border-blue-100 pb-1">ROLL NO: <span className="text-black ml-2">{student.rollNumber || "---"}</span></p>
-                    <p className="border-b border-blue-100 pb-1">CLASS: <span className="text-black uppercase ml-2">{student.className}</span></p>
-                    <p className="border-b border-blue-100 pb-1">FATHER'S NAME: <span className="text-black uppercase ml-2">{student.fatherName || "---"}</span></p>
-                  </div>
-                  <div className="w-28 h-32 border-2 border-blue-900 ml-4 overflow-hidden shadow-md">
-                    <img src={student.photoURL || student.photo || "https://via.placeholder.com/150"} alt="Student" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="flex-grow">
-                  <table className="w-full text-xs">
-                    <thead className="bg-blue-900 text-white">
-                      <tr>
-                        <th rowSpan="2">S.N</th>
-                        <th rowSpan="2" className="text-left">SUBJECTS</th>
-                        <th colSpan="2">HALF YEARLY</th>
-                        <th colSpan="2">ANNUAL</th>
-                        <th rowSpan="2" className="bg-blue-950">GRAND TOTAL</th>
-                      </tr>
-                      <tr className="bg-blue-800 text-[10px]">
-                        <th>MAX</th><th>OBT</th><th>MAX</th><th>OBT</th>
-                      </tr>
-                    </thead>
-                    <tbody className="font-bold text-blue-900">
-                      {subjects.map((sub, i) => {
-                        const m = getMarks(sub);
-                        return (
-                          <tr key={i} className="text-center h-8">
-                            <td>{i+1}</td>
-                            <td className="text-left uppercase px-2">{sub}</td>
-                            <td className="text-gray-400">{m.hM}</td>
-                            <td className="text-black">{m.hO}</td>
-                            <td className="text-gray-400">{m.aM}</td>
-                            <td className="text-black">{m.aO}</td>
-                            <td className="bg-blue-50 text-black">
-                              {m.hO + m.aO} <span className="text-[9px] text-gray-400">/ {m.hM + m.aM}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {/* Blank rows to maintain A4 height */}
-                      {Array.from({ length: Math.max(0, TABLE_ROWS_COUNT - subjects.length) }).map((_, i) => (
-                        <tr key={i} className="h-8"><td></td><td></td><td></td><td></td><td></td><td></td><td className="bg-blue-50/30"></td></tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-blue-900 text-white font-black">
-                      <tr className="text-center">
-                        <td colSpan="2" className="text-right px-4">TOTAL MARKS:</td>
-                        <td>{tHM}</td><td className="text-sm">{tHO}</td>
-                        <td>{tAM}</td><td className="text-sm">{tAO}</td>
-                        <td className="bg-yellow-400 text-blue-900 text-lg">{gTotalO} <span className="text-xs">/ {gTotalM}</span></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Summary */}
-                <div className="grid grid-cols-3 gap-4 mt-6">
-                  <div className="border-2 border-blue-900 p-2 text-center rounded">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Percentage</p>
-                    <p className="text-xl font-black">{perc}%</p>
-                  </div>
-                  <div className="border-2 border-blue-900 p-2 text-center rounded bg-blue-50">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Result</p>
-                    <p className={`text-xl font-black ${perc >= 33 ? 'text-green-600' : 'text-red-600'}`}>{perc >= 33 ? 'PASSED' : 'FAILED'}</p>
-                  </div>
-                  <div className="border-2 border-blue-900 p-2 text-center rounded">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Grade</p>
-                    <p className="text-xl font-black">{perc >= 75 ? 'A+' : perc >= 60 ? 'A' : perc >= 45 ? 'B' : 'C'}</p>
-                  </div>
-                </div>
-
-                {/* Footer Signatures */}
-                <div className="flex justify-between items-end mt-12 mb-4 px-4">
-                  <div className="text-center"><div className="w-32 border-t-2 border-blue-900 mb-1"></div><p className="text-[10px] font-bold">CLASS TEACHER</p></div>
-                  <div className="text-center"><div className="w-20 h-20 border border-dashed border-gray-300 rounded-full flex items-center justify-center text-[8px] text-gray-400">SEAL</div></div>
-                  <div className="text-center"><div className="w-32 border-t-2 border-blue-900 mb-1"></div><p className="text-[10px] font-bold">PRINCIPAL</p></div>
-                </div>
+            <div className="w-32 text-right font-bold text-blue-900">
+              <p className="text-[12px] whitespace-nowrap">📞 {school.phone}</p>
+              <div className="bg-black text-white px-2 py-0.5 mt-2 inline-block rounded text-[10px] uppercase tracking-widest font-black">
+                {isFamily ? "Family Copy" : "Student Copy"}
               </div>
             </div>
-          );
-        })}
+          </div>
+
+          {/* INFO SECTION */}
+          <div className="grid grid-cols-2 gap-4 text-[13px] py-3 border-b-[1px] border-black mb-3 bg-slate-50/50 px-2 rounded">
+            <div className="space-y-1">
+              <p className="flex gap-2">
+                <span className="font-bold min-w-[100px]">{isFamily ? "Family Members:" : "Student Name:"}</span> 
+                <span className="uppercase font-black text-blue-900">{allStudentNames}</span>
+              </p>
+              <p className="flex gap-2">
+                <span className="font-bold min-w-[100px]">Father's Name:</span> 
+                <span className="uppercase font-bold text-slate-700">{studentDetails?.fatherName || "---"}</span>
+              </p>
+              <p className="flex gap-2">
+                <span className="font-bold min-w-[100px]">Mobile:</span> 
+                <span className="font-black text-slate-800 tracking-wider">{studentDetails?.phone || "---"}</span>
+              </p>
+            </div>
+            <div className="text-right space-y-1">
+              <p><b>Date:</b> <span className="font-bold">{date}</span></p>
+              <p><b>Pay Month:</b> <span className="text-blue-700 font-black uppercase bg-blue-50 px-2 rounded">{payMonth}</span></p>
+              <p><b>Academic Session:</b> 2025-26</p>
+              <p><b>Class:</b> <span className="font-bold">{isFamily ? "Multiple" : `${studentClass || studentDetails?.className} `}</span></p>
+            </div>
+          </div>
+
+          {/* TABLE SECTION */}
+          <div className="flex-grow">
+            <table className="w-full border-collapse border-[1.5px] border-black text-[12px]">
+              <thead className="bg-slate-100 uppercase font-black">
+                <tr className="border-b-[1.5px] border-black">
+                  <th className="border-r-[1.5px] border-black w-12 py-2">S.No</th>
+                  <th className="border-r-[1.5px] border-black text-left px-4">Particulars / Description</th>
+                  <th className="text-right px-4 w-36">Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayData.map((group, gIdx) => (
+                  <React.Fragment key={gIdx}>
+                    {isFamily && (
+                      <tr className="bg-slate-50 border-b border-black font-black">
+                        <td className="border-r border-black text-center">{gIdx + 1}</td>
+                        <td colSpan="2" className="px-3 py-1.5 text-red-600 uppercase italic tracking-tighter">
+                           {group.studentName} — {group.className}
+                        </td>
+                      </tr>
+                    )}
+                    {group.items?.map((item, iIdx) => (
+                      <tr key={iIdx} className="h-8 border-b border-slate-200">
+                        <td className="border-r-[1.5px] border-black text-center text-slate-400">{!isFamily ? iIdx + 1 : ""}</td>
+                        <td className="border-r-[1.5px] border-black px-4 font-medium uppercase tracking-tight">
+                           {item.name} {item.count > 1 ? `[${item.count} Months]` : ""}
+                        </td>
+                        <td className="text-right px-4 font-mono font-bold text-slate-900">{Number(item.total).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+
+                {extraCharges?.length > 0 && (
+                  <>
+                    <tr className="bg-amber-50 border-y-[1.5px] border-black font-black italic">
+                      <td className="border-r border-black"></td>
+                      <td colSpan="2" className="px-3 py-1 uppercase text-[10px] text-amber-800 tracking-widest">Extra Charges / Fine / Misc</td>
+                    </tr>
+                    {extraCharges.map((ex, exIdx) => (
+                      <tr key={exIdx} className="h-8 border-b border-slate-200 italic text-amber-700">
+                        <td className="border-r border-black"></td>
+                        <td className="border-r border-black px-4">{ex.name}</td>
+                        <td className="text-right px-4 font-mono font-bold">{Number(ex.total).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* SUMMARY & QR FOOTER */}
+          <div className="mt-6 border-[1.5px] border-black flex bg-white">
+            <div className="w-2/3 p-4 border-r-[1.5px] border-black flex flex-col justify-between">
+               <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse"></div>
+                    <p className="text-[11px] font-black uppercase text-green-700 tracking-tighter">Payment Status: Verified & Paid</p>
+                  </div>
+                  <p className="text-[12px] leading-tight">
+                    <b>Amount in Words:</b><br/>
+                    <span className="italic font-black text-blue-900 underline uppercase decoration-blue-200 tracking-tight">Rupees {received} Only</span>
+                  </p>
+               </div>
+               
+               <div className="flex items-end justify-between mt-4">
+                  <div className="p-1 border border-slate-100 rounded bg-white shadow-sm">
+                    <QRCode value={`VERIFIED_RECEIPT:${allStudentNames}|AMT:${received}|DATE:${date}`} size={65} />
+                  </div>
+                  <div className="text-center">
+                    <div className="w-40 border-t-2 border-black pt-1 font-black text-[10px] uppercase tracking-tighter">Authorized Signatory</div>
+                    <p className="text-[8px] text-slate-400 mt-1 italic">Electronically Generated</p>
+                  </div>
+               </div>
+            </div>
+
+            <div className="w-1/3 text-[11px] font-bold">
+               <div className="flex justify-between p-1.5 border-b border-slate-100"><span>Current Fee</span> <span>{Number(currentTotal).toFixed(2)}</span></div>
+               <div className="flex justify-between p-1.5 border-b border-slate-100 text-red-600 italic"><span>Previous Dues</span> <span>{Number(oldBalance).toFixed(2)}</span></div>
+               
+               {/* DISCOUNT SECTION IN PRINT */}
+               {discount > 0 && (
+                 <div className="flex justify-between p-1.5 border-b border-slate-100 text-amber-600 font-black italic">
+                   <span>Special Discount (-)</span> 
+                   <span>{Number(discount).toFixed(2)}</span>
+                 </div>
+               )}
+
+               <div className="flex justify-between p-2 border-y-[1.5px] border-black bg-slate-50 text-blue-800 text-[12px] font-black uppercase"><span>Paid Amount</span> <span>₹{Number(received).toFixed(2)}</span></div>
+               <div className="flex justify-between p-3 bg-yellow-400 text-[16px] text-black font-black italic">
+                 <span>BALANCE</span> 
+                 <span>₹{Number(balance).toFixed(2)}</span>
+               </div>
+            </div>
+          </div>
+
+          <div className="text-center mt-3 opacity-20 text-[9px] font-black tracking-[8px] uppercase">vtech250 School ERP Solution</div>
+        </div>
       </div>
 
-      <div className="fixed bottom-10 right-10 print:hidden flex gap-3">
-        <button onClick={() => window.location.reload()} className="bg-white text-blue-900 font-bold px-6 py-3 rounded-full shadow-lg border-2 border-blue-900 hover:bg-blue-50 transition-all">Refresh</button>
-        <button onClick={handlePrint} className="bg-blue-900 text-white font-black px-10 py-3 rounded-full shadow-2xl hover:scale-105 transition-all">PRINT REPORT CARDS</button>
-      </div>
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 0; }
+          body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; }
+          .no-print { display: none !important; }
+          #print-area { 
+            width: 210mm; 
+            height: 297mm; 
+            padding: 10mm; 
+            margin: 0; 
+            box-shadow: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }

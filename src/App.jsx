@@ -33,10 +33,15 @@ import FeePlanMaster from "./page/FeePlanMaster";
 import FeeReceiptPage from "./page/FeeReceiptPage";
 import BusFeeFirebase from "./page/BusFeeFirebase";
 import SubjectMappingFirebase from "./page/SubjectMappingFirebase";
-import AdmitCardGenerator from "./page/AdmitCardGenerator";
+
 import TimetablePage from "./page/TimetablePage";
 import TimetableManager from "./page/TimetablePage";
 import TeacherBilling from "./page/TeacherBilling";
+import TeacherDetails from "./component/TeacherDetails";
+import BulkStudentImport from "./page/ExcelStudentImport";
+import AutoBell from "./page/AutoBell";
+import AdmitCardCenter from "./page/AdmitCardGenerator";
+
 
 // ... (baki imports same rahenge)
 // ... (imports same rahenge)
@@ -93,9 +98,9 @@ export default function App() {
                         <Route path="/fees" element={<FeesReceipt />} />
                         <Route path="/idcard/:studentId?" element={<IDCardGenerator />} />
                         <Route path="/absentstudent" element={<AbsentStudents />} />
-                        <Route path="/marksheet/:studentId" element={<MarksSheet />} />
+                        <Route path="/marksheet/:studentId/:session?" element={<MarksSheet />} />
                         <Route path="/help" element={<HelpPage />} />
-                        <Route path="/all-report/:className" element={<AllReport />} />
+                        <Route path="/all-report/:className/:session" element={<AllReport />} />
                         <Route path="/tc/:id" element={<TransferCertificate />} />
                         <Route path="/change-password" element={<ChangePassword/>} />
                         <Route path="/exam-time" element={<ExamTimetable/>} />
@@ -107,9 +112,12 @@ export default function App() {
                         <Route path="/feessetup" element={<MonthlyFeeSetup/>} />
                         <Route path="/feesrec/:id" element={<FeeReceiptPage/>} />
                         <Route path="/submap" element={<SubjectMappingFirebase/>} />
-                        <Route path="/admitcard" element={<AdmitCardGenerator/>} />
+                        <Route path="/admitcard" element={<AdmitCardCenter/>} />
                         <Route path="/teachertime" element={<TimetableManager/>} />
                         <Route path="/teacherbill/:id" element={<TeacherBilling/>} />
+                        <Route path="/teacherdetail/:id?" element={<TeacherDetails/>} />
+                        <Route path="/allexcel" element={<BulkStudentImport/>} />
+                        <Route path="/autobel" element={<AutoBell/>} />
 
                         <Route path="*" element={<Navigate to="/dash" replace />} />
                       </Routes>

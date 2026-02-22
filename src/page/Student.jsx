@@ -10,7 +10,7 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  where, // 🔥 Naya import add kiya
+  where,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
@@ -37,13 +37,16 @@ export default function StudentList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 🔥 Data Fetching Optimized: Ab ye pure database ki jagah sirf select ki gayi class fetch karega
+  // 🔥 State to control how many rows to show on UI
+  const [rowsToShow, setRowsToShow] = useState(5);
+
   useEffect(() => {
     setLoading(true);
+    // Yahan se limit hata di hai taaki search mein data mis na ho
     const q = query(
       collection(db, "students"), 
-      where("session", "==", session), // Session filter
-      where("className", "==", className), // Class filter
+      where("session", "==", session), 
+      where("className", "==", className), 
       orderBy("createdAt", "desc")
     );
 
@@ -59,9 +62,9 @@ export default function StudentList() {
     });
 
     return () => unsub();
-  }, [session, className]); // Jab session ya class badlega tabhi naya data load hoga
+  }, [session, className]);
 
-  // Filter Logic (Search ke liye client-side filter rakha hai)
+  // Filter & Sort Logic
   const filteredStudents = students
     .filter((s) => {
       const matchSearch = s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -69,6 +72,11 @@ export default function StudentList() {
       return matchSearch;
     })
     .sort((a, b) => parseInt(a.rollNumber || 0) - parseInt(b.rollNumber || 0));
+
+  // 🔥 Final data jo screen pe dikhega (Search hone par poora dikhega, normal mein limit se)
+  const displayedStudents = searchTerm 
+    ? filteredStudents 
+    : filteredStudents.slice(0, rowsToShow);
 
   const handleReAdmission = (student) => {
     setEditStudent(student);
@@ -96,10 +104,10 @@ export default function StudentList() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
-          <select value={session} onChange={(e) => setSession(e.target.value)} className="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-bold bg-white outline-none">
+          <select value={session} onChange={(e) => { setSession(e.target.value); setRowsToShow(5); }} className="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-bold bg-white outline-none">
             {sessions.map(s => <option key={s}>{s}</option>)}
           </select>
-          <select value={className} onChange={(e) => setClassName(e.target.value)} className="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-bold bg-white outline-none">
+          <select value={className} onChange={(e) => { setClassName(e.target.value); setRowsToShow(5); }} className="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-bold bg-white outline-none">
             {schoolClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
           </select>
           <div className="flex-grow">
@@ -124,8 +132,10 @@ export default function StudentList() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr><td colSpan="7" className="text-center py-10">Loading...</td></tr>
+              ) : displayedStudents.length === 0 ? (
+                <tr><td colSpan="7" className="text-center py-10 text-gray-400">No students found.</td></tr>
               ) : (
-                filteredStudents.map((s) => (
+                displayedStudents.map((s) => (
                   <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2 text-center">
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 bg-gray-50 mx-auto">
@@ -135,7 +145,7 @@ export default function StudentList() {
                     <td className="px-4 py-3 text-sm font-bold text-gray-500 text-center">{s.rollNumber}</td>
                     <td className="px-4 py-3 text-xs font-bold text-gray-800 uppercase">{s.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{s.className}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{s.fatName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{s.fatherName}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{s.phone || "N/A"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">
@@ -165,8 +175,21 @@ export default function StudentList() {
             </tbody>
           </table>
         </div>
+
+        {/* 🔥 Show More Button logic: Agar bache bache hain aur search nhi ho raha tabhi dikhega */}
+        {!loading && !searchTerm && filteredStudents.length > rowsToShow && (
+          <div className="mt-6 flex justify-center pb-10">
+            <button 
+              onClick={() => setRowsToShow(prev => prev + 10)}
+              className="px-8 py-2 bg-indigo-600 text-white text-sm font-bold rounded-full hover:bg-indigo-700 transition-all shadow-lg uppercase tracking-wide"
+            >
+              Show More Students ({filteredStudents.length - rowsToShow} remaining)
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Modals same rahenge */}
       {open && <AddStudent close={() => { setOpen(false); setEditStudent(null); }} editData={editStudent} />}
       {openRe && <Readmission close={() => { setOpenRe(false); setEditStudent(null); }} studentData={editStudent} />}
       {openDetails && selectedStudentForDetails && (

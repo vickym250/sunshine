@@ -17,19 +17,15 @@ const ReportCardModal = ({ data, onClose }) => {
     address: "Mahanua",
     affiliation: "UP BOARD",
     contact: "234565467",
-    logoUrl: "https://firebasestorage.googleapis.com/v0/b/jnschool-6e62e.firebasestorage.app/o/school_logo%2Fmain_logo?alt=media&token=deddab30-5313-4f49-af39-7b15b6ddb9e3"
+    logoUrl: ""
   });
 
   useEffect(() => {
     const fetchSchool = async () => {
       try {
         const schoolSnap = await getDoc(doc(db, "settings", "schoolDetails"));
-        if (schoolSnap.exists()) {
-          setSchool(schoolSnap.data());
-        }
-      } catch (err) {
-        console.error("School data fetch error:", err);
-      }
+        if (schoolSnap.exists()) setSchool(schoolSnap.data());
+      } catch (err) { console.error("School data fetch error:", err); }
     };
     fetchSchool();
   }, []);
@@ -48,135 +44,116 @@ const ReportCardModal = ({ data, onClose }) => {
   const percent = grandTotalMax ? ((grandTotalObt / grandTotalMax) * 100).toFixed(2) : "0.00";
   const grade = Number(percent) >= 33 ? "PASS" : "FAIL";
 
-  const handlePrint = () => window.print();
-
   return (
-    <div className="fixed inset-0 bg-black/90 z-[999] flex justify-center items-start overflow-y-auto p-4 md:p-10 text-slate-900">
+    <div className="fixed inset-0 bg-black/90 z-[999] flex justify-center items-start overflow-y-auto p-2 md:p-10 text-slate-900">
       <style>
         {`
           @media print {
+            html, body { height: 100%; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
             body * { visibility: hidden !important; }
+            .no-print { display: none !important; }
+            @page { size: A4 portrait; margin: 0; }
             #printable-area, #printable-area * { visibility: visible !important; }
             #printable-area {
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100% !important;
-              margin: 0 !important;
-              padding: 10mm !important;
-              border: 12px double #1e3a8a !important;
-              background-color: white !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
+              position: fixed !important; left: 0 !important; top: 0 !important;
+              width: 210mm !important; height: 296mm !important;
+              padding: 10mm !important; border: 10px double #1e3a8a !important;
+              background-color: white !important; -webkit-print-color-adjust: exact !important;
             }
-            @page { size: A4 portrait; margin: 0; }
-            .no-print { display: none !important; }
           }
         `}
       </style>
 
-      <div id="printable-area" className="relative bg-white w-full max-w-[850px] border-[12px] border-double border-blue-900 p-8 md:p-10 font-serif shadow-2xl mb-10">
-        <div className="absolute -top-12 right-0 flex gap-3 no-print">
-          <button onClick={handlePrint} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow-lg">🖨️ PRINT</button>
-          <button onClick={onClose} className="px-6 py-2 bg-white text-red-600 font-bold rounded-lg shadow-lg">CLOSE</button>
+      <div id="printable-area" className="relative bg-white w-full max-w-[850px] border-[6px] md:border-[12px] border-double border-blue-900 p-4 md:p-10 font-serif shadow-2xl my-4 md:my-10">
+        <div className="absolute -top-10 md:-top-14 right-0 flex gap-2 no-print">
+          <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 text-white text-xs font-black rounded-full shadow-xl">🖨️ PRINT</button>
+          <button onClick={onClose} className="px-5 py-2 bg-white text-red-600 text-xs font-black rounded-full shadow-xl border border-red-100">CLOSE</button>
         </div>
 
-        <div className="flex items-center justify-between border-b-[4px] border-blue-900 pb-4 mb-4">
-          <div className="w-24 h-24 flex-shrink-0">
-            <img src={school.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+        <div className="flex flex-col md:flex-row items-center justify-between border-b-[3px] border-blue-900 pb-4 mb-6">
+          <img src={school.logoUrl} alt="Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain" />
+          <div className="flex-1 px-4 text-center md:text-left">
+            <p className="text-blue-800 font-bold text-[9px] uppercase tracking-[0.2em]">Affiliated to: {school.affiliation}</p>
+            <h1 className="text-2xl md:text-3xl font-black uppercase text-blue-900 leading-tight">{school.name}</h1>
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{school.address}</p>
           </div>
-          <div className="flex-1 text-center px-2">
-            <p className="text-blue-800 font-black text-xs uppercase tracking-[0.3em] mb-1">Affiliated to: {school.affiliation}</p>
-            <h1 className="text-3xl md:text-4xl font-black uppercase text-blue-900 leading-tight">{school.name}</h1>
-            <p className="text-[13px] font-bold text-gray-700 uppercase mt-1">{school.address}</p>
-          </div>
-          <div className="w-24 text-right flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Academic</span>
-            <span className="text-lg font-black text-blue-900 italic">{data.session}</span>
-          </div>
-        </div>
-
-        <div className="text-center mb-6">
-          <h2 className="inline-block border-2 border-blue-900 text-blue-900 px-6 py-1 rounded-md font-black text-sm uppercase bg-blue-50">Progress Report Card</h2>
-        </div>
-
-        <div className="flex flex-row justify-between items-start gap-4 mb-6">
-          <div className="flex-1 grid grid-cols-1 gap-y-2 text-[14px]">
-            <div className="flex border-b border-gray-100 py-1">
-              <span className="w-40 font-bold text-blue-900">STUDENT NAME:</span>
-              <span className="uppercase font-black text-gray-800">{data.name}</span>
-            </div>
-            <div className="flex border-b border-gray-100 py-1">
-              <span className="w-40 font-bold text-blue-900">ROLL NUMBER:</span>
-              <span className="font-mono font-black text-blue-900 text-lg">{data.roll}</span>
-            </div>
-            <div className="flex border-b border-gray-100 py-1">
-              <span className="w-40 font-bold text-blue-900">CLASS:</span>
-              <span className="uppercase font-medium text-gray-700">{data.className}</span>
-            </div>
-          </div>
-          <div className="w-32 h-36 border-4 border-blue-900 bg-white p-0.5">
-            <div className="w-full h-full overflow-hidden flex items-center justify-center bg-gray-50">
-              {data.photoURL ? <img src={data.photoURL} alt="Student" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-300">PHOTO</span>}
-            </div>
+          <div className="mt-2 md:mt-0 md:text-right border-t md:border-t-0 md:border-l-2 border-blue-900 pl-4">
+            <span className="block text-[9px] font-bold text-gray-400 uppercase">Session</span>
+            <span className="text-lg font-black text-blue-900 italic leading-none">{data.session}</span>
+            <div className="mt-1 bg-blue-900 text-white text-[9px] px-2 py-0.5 rounded font-black">{data.exam}</div>
           </div>
         </div>
 
-        <table className="w-full border-collapse border-[1.5px] border-black mb-6 text-[13px]">
+        <div className="flex justify-between items-start gap-6 mb-6">
+          <div className="flex-1 grid grid-cols-1 gap-y-1.5">
+            {[
+              { label: "STUDENT NAME", value: data.name, bold: true },
+              { label: "ROLL NUMBER", value: data.roll },
+              { label: "REG NO.", value: data.regNo || "N/A" },
+              { label: "CLASS", value: data.className },
+              { label: "FATHER'S NAME", value: data.fatherName || "N/A" },
+              { label: "MOTHER'S NAME", value: data.motherName || "N/A" }
+            ].map((item, idx) => (
+              <div key={idx} className="flex border-b border-gray-100 py-1 items-center">
+                <span className="w-32 font-bold text-blue-900 text-[10px] md:text-[12px] shrink-0">{item.label}:</span>
+                <span className={`uppercase text-gray-800 ${item.bold ? 'font-black' : 'font-medium'}`}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="w-24 h-28 border-2 border-blue-900 p-0.5 shadow-sm">
+            {data.photoURL ? <img src={data.photoURL} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-100 flex items-center justify-center text-[8px]">PHOTO</div>}
+          </div>
+        </div>
+
+        <table className="w-full border-collapse border-2 border-black text-[11px] md:text-[13px] mb-6">
           <thead>
             <tr className="bg-blue-900 text-white">
-              <th className="border border-black p-2.5 w-12">S.N</th>
-              <th className="border border-black p-2.5 text-left">SUBJECTS</th>
-              <th className="border border-black p-2.5 w-24">MAX</th>
-              <th className="border border-black p-2.5 w-24">OBTAINED</th>
-              <th className="border border-black p-2.5 w-24">STATUS</th>
+              <th className="border border-black p-1.5 w-10">S.N</th>
+              <th className="border border-black p-1.5 text-left">SUBJECTS</th>
+              <th className="border border-black p-1.5 w-16">MAX</th>
+              <th className="border border-black p-1.5 w-16">OBT.</th>
+              <th className="border border-black p-1.5 w-20">RESULT</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className="even:bg-gray-50">
-                <td className="border border-black p-2 text-center font-bold">{i + 1}</td>
-                <td className="border border-black p-2 uppercase font-black text-blue-900">{r.subject}</td>
-                <td className="border border-black p-2 text-center">{r.total}</td>
-                <td className="border border-black p-2 text-center font-black italic">{r.marks}</td>
-                <td className="border border-black p-2 text-center font-bold text-[10px]">{Number(r.marks) >= (Number(r.total) * 0.33) ? "PASS" : "FAIL"}</td>
+                <td className="border border-black p-1.5 text-center font-bold text-gray-400">{i + 1}</td>
+                <td className="border border-black p-1.5 uppercase font-black text-blue-900">{r.subject}</td>
+                <td className="border border-black p-1.5 text-center">{r.total}</td>
+                <td className="border border-black p-1.5 text-center font-black text-base">{r.marks}</td>
+                <td className="border border-black p-1.5 text-center font-bold text-[10px]">{Number(r.marks) >= (Number(r.total) * 0.33) ? "PASS" : "FAIL"}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="bg-blue-100 font-black">
-              <td colSpan="2" className="border border-black p-3 text-right">TOTAL:</td>
-              <td className="border border-black p-3 text-center">{grandTotalMax}</td>
-              <td className="border border-black p-3 text-center text-xl text-blue-900 italic">{grandTotalObt}</td>
-              <td className="border border-black p-3 text-center">{grade}</td>
+            <tr className="bg-blue-50 font-black border-t-2 border-black text-blue-900">
+              <td colSpan="2" className="border border-black p-2 text-right">TOTAL MARKS:</td>
+              <td className="border border-black p-2 text-center">{grandTotalMax}</td>
+              <td className="border border-black p-2 text-center text-xl">{grandTotalObt}</td>
+              <td className="border border-black p-2 text-center">{grade}</td>
             </tr>
           </tfoot>
         </table>
 
-        <div className="grid grid-cols-3 gap-0 border-2 border-blue-900 rounded-lg overflow-hidden mb-8 text-center">
-            <div className="p-3 border-r-2 border-blue-900">
-                <p className="text-[9px] font-bold text-gray-400 uppercase">Percentage</p>
-                <p className="text-xl font-black text-blue-900">{percent}%</p>
+        <div className="grid grid-cols-3 gap-3 mb-8">
+            <div className="border border-blue-900 rounded-lg p-2 text-center">
+              <p className="text-[8px] text-gray-400 font-bold">Percentage</p>
+              <p className="text-lg font-black text-blue-900">{percent}%</p>
             </div>
-            <div className="p-3 border-r-2 border-blue-900 bg-blue-50/50">
-                <p className="text-[9px] font-bold text-gray-400 uppercase">Grade</p>
-                <p className="text-xl font-black text-blue-900">{percent >= 80 ? "A+" : percent >= 60 ? "A" : percent >= 45 ? "B" : "C"}</p>
+            <div className="border border-blue-900 rounded-lg p-2 text-center bg-blue-50/50">
+              <p className="text-[8px] text-gray-400 font-bold">Grade</p>
+              <p className="text-lg font-black text-blue-900">{percent >= 80 ? "A+" : percent >= 60 ? "A" : percent >= 45 ? "B" : "C"}</p>
             </div>
-            <div className="p-3">
-                <p className="text-[9px] font-bold text-gray-400 uppercase">Result</p>
-                <p className={`text-xl font-black ${grade === "PASS" ? "text-green-600" : "text-red-600"}`}>{grade}</p>
+            <div className="border border-blue-900 rounded-lg p-2 text-center">
+              <p className="text-[8px] text-gray-400 font-bold">Status</p>
+              <p className={`text-lg font-black ${grade === "PASS" ? "text-green-600" : "text-red-600"}`}>{grade}</p>
             </div>
         </div>
 
-        <div className="flex justify-between mt-16 px-4">
-          <div className="text-center">
-            <div className="w-32 border-b-2 border-black mb-1"></div>
-            <p className="text-[10px] font-black uppercase text-gray-500">Class Teacher</p>
-          </div>
-          <div className="text-center">
-            <div className="w-48 border-b-2 border-blue-900 mb-1"></div>
-            <p className="text-[10px] font-black uppercase text-blue-900">Principal Signature</p>
-          </div>
+        <div className="flex justify-between items-end mt-12 px-4">
+          <div className="text-center"><div className="w-32 border-b border-gray-400 mb-1"></div><p className="text-[9px] font-black uppercase text-gray-400">Class Teacher</p></div>
+          <div className="text-center"><div className="w-44 border-b-2 border-blue-900 mb-1"></div><p className="text-[9px] font-black uppercase text-blue-900">Principal Signature</p></div>
         </div>
       </div>
     </div>
@@ -214,8 +191,9 @@ export default function FinalResultPage() {
   const [subjectMaster, setSubjectMaster] = useState({});
   const [classesList, setClassesList] = useState([]);
   const examTypes = ["Quarterly", "Half-Yearly", "Annual"];
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  // Fetch Master Data
+  // 1. Fetch Master Data (Classes & Subjects)
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
@@ -230,22 +208,42 @@ export default function FinalResultPage() {
             setFilterClass(sortedClasses[0]);
           }
         }
-      } catch (err) {
-        console.error("Master data error:", err);
-      }
+      } catch (err) { console.error("Master data error:", err); }
     };
     fetchMasterData();
   }, []);
 
-  // Fetch Students (Merged with session filter logic)
+  // 2. Load Results for Dashboard & "Done" Check
+  const loadResults = async () => {
+    // Dashboard filter use karega (filterClass) aur Form internal state use karega (cls)
+    // Dono ke liye common fetcher
+    const classToFetch = showForm ? cls : filterClass;
+    const examToFetch = showForm ? exam : filterExam;
+
+    if (!classToFetch) return;
+    try {
+      const q = query(
+        collection(db, "examResults"), 
+        where("className", "==", classToFetch), 
+        where("exam", "==", examToFetch), 
+        where("session", "==", session)
+      );
+      const snap = await getDocs(q);
+      setResultList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) { console.error("Fetch Results Error:", err); }
+  };
+
+  // Re-fetch jab dashboard filters change ho
+  useEffect(() => { if(!showForm) loadResults(); }, [filterClass, filterExam, session, showForm]);
+
+  // Re-fetch jab FORM ke andar Exam ya Class change ho (Important for Done Status)
+  useEffect(() => { if(showForm) loadResults(); }, [exam, cls, session, showForm]);
+
+  // 3. Fetch Students of Selected Class
   useEffect(() => {
     if (!cls) return;
     const fetchStudents = async () => {
-      const q = query(
-        collection(db, "students"), 
-        where("className", "==", cls),
-        where("session", "==", session)
-      );
+      const q = query(collection(db, "students"), where("className", "==", cls), where("session", "==", session));
       const snap = await getDocs(q);
       setAllStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
@@ -255,28 +253,6 @@ export default function FinalResultPage() {
       setRows(subjectMaster[cls].map(sub => ({ subject: sub, total: "100", marks: "" })));
     }
   }, [cls, subjectMaster, editingId, session]);
-
-  // Load Results for Dashboard Table
-  const loadResults = async () => {
-    if (!filterClass) return;
-    setLoading(true);
-    try {
-      const q = query(
-        collection(db, "examResults"), 
-        where("className", "==", filterClass), 
-        where("exam", "==", filterExam),
-        where("session", "==", session)
-      );
-      const snap = await getDocs(q);
-      setResultList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error("Fetch Results Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { loadResults(); }, [filterClass, filterExam, session]);
 
   const filteredResultList = resultList.filter(r => 
     r.name.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
@@ -292,14 +268,10 @@ export default function FinalResultPage() {
   const saveResult = async () => {
     if (!selectedStudentId) return toast.error("Student select karo!");
     
-    // DUPLICATE CHECK
-    if (!editingId) {
-      const isDuplicate = resultList.some(res => 
-        res.studentId === selectedStudentId && 
-        res.exam === exam && 
-        res.session === session
-      );
-      if (isDuplicate) return toast.error("Is student ka result pehle hi bana hua hai!");
+    // Final check before saving
+    const isAlreadyDone = resultList.some(res => String(res.studentId) === String(selectedStudentId) && res.exam === exam && res.session === session);
+    if (!editingId && isAlreadyDone) {
+        return toast.error("Is Student ka result pehle hi bana hua hai!");
     }
 
     const student = allStudents.find(s => s.id === selectedStudentId);
@@ -312,16 +284,10 @@ export default function FinalResultPage() {
     setLoading(true);
     try {
       const payload = {
-        session, 
-        studentId: selectedStudentId,
-        name: student?.name || name,
-        className: cls,
-        roll: student?.rollNumber || "",
-        fatherName: student?.fatherName || "",
-        photoURL: student?.photoURL || "",
-        exam,
-        rows: cleanRows,
-        updatedAt: serverTimestamp()
+        session, studentId: selectedStudentId, name: student?.name || name,
+        className: cls, roll: student?.rollNumber || "", regNo: student?.regNo || "",
+        fatherName: student?.fatherName || "", motherName: student?.motherName || "",
+        photoURL: student?.photoURL || "", exam, rows: cleanRows, updatedAt: serverTimestamp()
       };
       if (editingId) {
         await updateDoc(doc(db, "examResults", editingId), payload);
@@ -330,242 +296,230 @@ export default function FinalResultPage() {
         await addDoc(collection(db, "examResults"), { ...payload, createdAt: serverTimestamp() });
         toast.success("Result Saved!");
       }
-      setShowForm(false);
-      setEditingId(null);
-      loadResults();
-    } catch (e) {
-      toast.error("Error saving data!");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePrintAll = () => {
-    if (resultList.length === 0) return toast.error("No records!");
-    const formattedClass = filterClass.replace(/\s+/g, "");
-    const path = filterExam === "Annual" 
-      ? `/marksheet/${formattedClass}/${session}` 
-      : `/all-report/${formattedClass}/${session}`;
-    navigate(path);
+      setShowForm(false); setEditingId(null); loadResults();
+    } catch (e) { toast.error("Error saving data!"); } 
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-black italic text-slate-900 uppercase">
+    <div className="p-3 md:p-8 bg-slate-50 min-h-screen font-black italic text-slate-900 uppercase">
       <Toaster />
       {showModal && <ReportCardModal data={selectedResult} onClose={() => setShowModal(false)} />}
 
       <div className="max-w-7xl mx-auto">
-        {/* Dashboard Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 bg-white p-6 rounded-[32px] border shadow-sm">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 italic leading-none">Result Dashboard</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] text-slate-400 tracking-widest">Global Session:</span>
-              <select 
-                value={session} 
-                onChange={(e) => setSession(e.target.value)}
-                className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-xs font-black border-none outline-none cursor-pointer"
-              >
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-white p-6 rounded-[24px] md:rounded-[32px] border shadow-sm">
+          <div className="text-center md:text-left">
+            <h1 className="text-xl md:text-2xl font-black text-slate-800 italic leading-none">Result Dashboard</h1>
+            <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
+              <span className="text-[10px] text-slate-400 tracking-widest">Session:</span>
+              <select value={session} onChange={(e) => setSession(e.target.value)} className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-xs font-black border-none outline-none">
                 {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
-          <button onClick={() => { setEditingId(null); setSelectedStudentId(""); setStudentSearch(""); setShowForm(true); }} className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-black text-xs shadow-xl hover:scale-105 transition-all">+ Add Result</button>
+          <button onClick={() => { setEditingId(null); setSelectedStudentId(""); setStudentSearch(""); setExam("Annual"); setShowForm(true); }} className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl font-black text-xs shadow-xl">+ Add Result</button>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-[10px] tracking-widest">
+        {/* Dashboard Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <div className="bg-white p-4 rounded-2xl border shadow-sm flex flex-col">
-            <span className="text-slate-400 mb-1 ml-1 uppercase font-bold">Class</span>
+            <span className="text-[9px] text-slate-400 mb-1 uppercase font-bold">Class</span>
             <select className="bg-transparent font-black text-sm outline-none italic" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
               {classesList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="bg-white p-4 rounded-2xl border shadow-sm flex flex-col">
-            <span className="text-slate-400 mb-1 ml-1 uppercase font-bold">Exam</span>
+            <span className="text-[9px] text-slate-400 mb-1 uppercase font-bold">Exam</span>
             <select className="bg-transparent font-black text-sm outline-none italic" value={filterExam} onChange={e => setFilterExam(e.target.value)}>
               {examTypes.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
-          <div className="bg-indigo-600 p-4 rounded-2xl border shadow-lg flex flex-col">
-            <span className="text-indigo-200 mb-1 ml-1 uppercase font-bold">Search Table</span>
-            <input 
-              type="text" 
-              placeholder="NAME / ROLL..." 
-              className="bg-transparent text-white placeholder:text-indigo-300 font-black text-sm outline-none italic"
-              value={dashboardSearch}
-              onChange={(e) => setDashboardSearch(e.target.value)}
-            />
+          <div className="bg-indigo-600 p-4 rounded-2xl border shadow-lg flex flex-col sm:col-span-2 md:col-span-1">
+            <span className="text-[9px] text-indigo-200 mb-1 uppercase font-bold">Quick Search</span>
+            <input type="text" placeholder="NAME / ROLL..." className="bg-transparent text-white placeholder:text-indigo-300 font-black text-sm outline-none italic" value={dashboardSearch} onChange={(e) => setDashboardSearch(e.target.value)} />
           </div>
         </div>
 
         {/* Results Table */}
-        <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden mb-6">
-          <table className="w-full text-left text-xs italic">
-            <thead className="bg-slate-50 border-b">
-              <tr className="text-[10px] text-slate-400 tracking-widest uppercase">
-                <th className="px-6 py-4">Student</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-center">Exam</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredResultList.map(r => (
-                <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden border">
-                      {r.photoURL ? <img src={r.photoURL} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-100" />}
-                    </div>
-                    <div>
-                      <p className="font-black text-slate-800 text-sm">{r.name}</p>
-                      <p className="text-[10px] text-slate-400 italic">Roll: {r.roll} | {r.session}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter">✓ COMPLETED</span>
-                  </td>
-                  <td className="px-6 py-4 text-center text-indigo-600">{r.exam}</td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button onClick={() => { setEditingId(r.id); setSelectedStudentId(r.studentId); setStudentSearch(r.name); setCls(r.className); setExam(r.exam); setRows(r.rows); setSession(r.session || session); setShowForm(true); }} className="text-blue-600 border px-4 py-1 rounded-lg text-[10px] font-black">Edit</button>
-                    <button onClick={() => {setSelectedResult(r); setShowModal(true);}} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-[10px] font-black">View</button>
-                    <button onClick={() => {if(window.confirm('Delete?')) deleteDoc(doc(db, "examResults", r.id)).then(loadResults)}} className="text-red-300 px-2">✕</button>
-                  </td>
+        <div className="bg-white rounded-[24px] md:rounded-[32px] border shadow-sm overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs italic min-w-[600px]">
+              <thead className="bg-slate-50 border-b uppercase text-[9px] text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Student</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-center">Exam</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredResultList.map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden border shrink-0">
+                        {r.photoURL ? <img src={r.photoURL} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-100" />}
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-800 text-sm leading-none">{r.name}</p>
+                        <p className="text-[9px] text-slate-400 italic mt-1">Roll: {r.roll} | Reg: {r.regNo || 'N/A'}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-[8px] font-black">✓ DONE</span>
+                    </td>
+                    <td className="px-6 py-4 text-center text-indigo-600 font-bold">{r.exam}</td>
+                    <td className="px-6 py-4 text-right space-x-1">
+                      <button onClick={() => { setEditingId(r.id); setSelectedStudentId(r.studentId); setStudentSearch(r.name); setCls(r.className); setExam(r.exam); setRows(r.rows); setSession(r.session || session); setShowForm(true); }} className="text-blue-600 border px-3 py-1 rounded-lg text-[9px] font-black hover:bg-blue-50">Edit</button>
+                      <button onClick={() => {setSelectedResult(r); setShowModal(true);}} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-[9px] font-black">View</button>
+                      <button onClick={() => {if(window.confirm('Delete?')) deleteDoc(doc(db, "examResults", r.id)).then(loadResults)}} className="text-red-300 px-1 ml-1 font-normal hover:text-red-600">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className="bg-white p-6 rounded-[32px] border shadow-sm flex justify-between items-center">
-          <h1 className="text-xl font-black text-slate-800 italic">Bulk Actions</h1>
-          <button onClick={handlePrintAll} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-xs shadow-xl">🖨 PRINT ALL ({session})</button>
+        <div className="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[32px] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+          <h1 className="text-lg font-black text-slate-800 italic">Bulk Actions</h1>
+          <button onClick={() => {
+             if (resultList.length === 0) return toast.error("No records!");
+             const path = filterExam === "Annual" ? `/marksheet/${filterClass.replace(/\s+/g, "")}/${session}` : `/all-report/${filterClass.replace(/\s+/g, "")}/${session}`;
+             navigate(path);
+          }} className="w-full md:w-auto bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-xs shadow-xl">🖨 PRINT ALL ({filterClass})</button>
         </div>
       </div>
 
-      {/* FORM MODAL */}
+      {/* ==========================================
+          ADD/EDIT RESULT FORM (MODAL)
+          ========================================== */}
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-2 md:p-4 text-slate-900">
-          <div className="bg-white w-full max-w-4xl max-h-[95vh] rounded-[40px] shadow-2xl overflow-y-auto p-6 md:p-10 italic">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-xl md:text-3xl font-black text-indigo-600 tracking-tighter italic">{editingId ? "Update Result" : `Add New Entry`}</h2>
-              <button onClick={() => { setShowForm(false); setEditingId(null); }} className="bg-slate-100 p-2 px-5 rounded-full text-slate-400 font-black">✕</button>
+          <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-[30px] md:rounded-[40px] shadow-2xl overflow-y-auto p-5 md:p-10 italic">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg md:text-2xl font-black text-indigo-600 tracking-tighter italic">{editingId ? "Update Result" : "Add New Entry"}</h2>
+              <button onClick={() => { setShowForm(false); setEditingId(null); setShowDropdown(false); }} className="bg-slate-100 p-2 px-4 rounded-full text-slate-400 font-black">✕</button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 text-[10px] tracking-widest">
-              <div className="space-y-4 font-black italic">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="space-y-3 font-black italic">
                 <div>
-                  <label className="text-slate-400 ml-2 mb-1 block uppercase">Academic Session</label>
-                  <select 
-                    className="w-full bg-indigo-50 border-none p-4 rounded-2xl font-black text-sm outline-none focus:ring-2 ring-indigo-200 italic uppercase" 
-                    value={session} 
-                    onChange={(e) => setSession(e.target.value)}
-                  >
+                  <label className="text-slate-400 ml-2 mb-1 block text-[9px] uppercase">Session</label>
+                  <select className="w-full bg-indigo-50 p-3 md:p-4 rounded-2xl font-black text-xs md:text-sm outline-none" value={session} onChange={(e) => setSession(e.target.value)}>
                     {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="text-slate-400 ml-2 mb-1 block">Class Select Karo</label>
-                  <select className="w-full bg-slate-50 border-none p-4 rounded-2xl font-black text-sm outline-none focus:ring-2 ring-indigo-200 italic uppercase" value={cls} onChange={e => setCls(e.target.value)} disabled={editingId}>
-                    {classesList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-400 ml-2 mb-1 block">Exam Type</label>
-                  <select className="w-full bg-slate-50 border-none p-4 rounded-2xl font-black text-sm outline-none focus:ring-2 ring-indigo-200 italic uppercase" value={exam} onChange={e => setExam(e.target.value)}>{examTypes.map(e => <option key={e} value={e}>{e}</option>)}</select>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-slate-400 ml-2 mb-1 block text-[9px]">CLASS</label>
+                    <select className="w-full bg-slate-50 p-3 md:p-4 rounded-2xl font-black text-xs md:text-sm outline-none" value={cls} onChange={e => { setCls(e.target.value); setSelectedStudentId(""); setStudentSearch(""); }} disabled={editingId}>
+                      {classesList.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-400 ml-2 mb-1 block text-[9px]">EXAM</label>
+                    <select className="w-full bg-slate-50 p-3 md:p-4 rounded-2xl font-black text-xs md:text-sm outline-none" value={exam} onChange={e => setExam(e.target.value)}>
+                      {examTypes.map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* SEARCH BOX WITH STATUS BADGE */}
               <div className="relative font-black italic">
-                <label className="text-slate-400 ml-2 mb-1 block uppercase">Student Search (Name/Roll)</label>
-                <input 
-                  type="text" 
-                  placeholder="START TYPING..." 
-                  className="w-full bg-indigo-50/50 p-4 rounded-2xl font-black outline-none border-2 border-transparent focus:border-indigo-400 transition-all uppercase text-sm italic" 
-                  value={studentSearch} 
-                  onChange={e => {setStudentSearch(e.target.value); if(!editingId) setSelectedStudentId("");}} 
-                  disabled={editingId} 
-                />
+                <label className="text-slate-400 ml-2 mb-1 block text-[9px] uppercase tracking-widest">Select Student ({cls})</label>
                 
-                {studentSearch && !selectedStudentId && !editingId && (
-                  <div className="absolute top-20 left-0 w-full bg-white border-2 rounded-2xl z-20 max-h-48 overflow-y-auto shadow-2xl p-2 mt-1">
-                    {allStudents
-                      .filter(s => 
-                        (s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
-                        (s.rollNumber && s.rollNumber.toString().includes(studentSearch)))
-                      )
-                      .map(s => {
-                        // Logic to check if result is already done
-                        const isDone = resultList.some(res => res.studentId === s.id && res.exam === exam);
-                        
-                        return (
-                          <div 
-                            key={s.id} 
-                            onClick={() => { 
-                              if(isDone) return toast.error("Result pehle se hai!");
-                              setSelectedStudentId(s.id); 
-                              setName(s.name); 
-                              setStudentSearch(s.name); 
-                            }} 
-                            className={`p-4 cursor-pointer rounded-xl font-bold text-[11px] flex justify-between items-center border-b last:border-0 hover:bg-indigo-600 hover:text-white group transition-all ${isDone ? 'bg-red-50/50' : ''}`}
-                          >
-                            <div className="flex flex-col">
-                              <span>{s.name}</span>
-                              <span className="opacity-40 text-[9px]">ROLL: {s.rollNumber}</span>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="CLICK TO SELECT STUDENT..." 
+                    className={`w-full bg-indigo-50/50 p-3 md:p-4 font-black outline-none border-2 border-indigo-100 focus:border-indigo-400 text-xs md:text-sm ${showDropdown && !selectedStudentId && !editingId ? 'rounded-t-2xl' : 'rounded-2xl'}`} 
+                    value={studentSearch} 
+                    onClick={() => setShowDropdown(true)} 
+                    onChange={e => {setStudentSearch(e.target.value); setShowDropdown(true); if(!editingId) setSelectedStudentId("");}} 
+                    disabled={editingId} 
+                    autoComplete="off"
+                  />
+                  {!editingId && !selectedStudentId && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none">▼</span>}
+                </div>
+                
+                {/* DYNAMIC DROPDOWN: Shows "Done" based on current Exam Selection */}
+                {!editingId && !selectedStudentId && showDropdown && (
+                  <div className="absolute left-0 w-full bg-white border-2 border-t-0 border-indigo-100 rounded-b-2xl z-20 max-h-56 overflow-y-auto shadow-xl mt-0 divide-y divide-slate-50">
+                    <div className="p-2 bg-indigo-50 text-[8px] text-indigo-400 flex justify-between items-center">
+                      <span>SHOWING RESULTS FOR {exam}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setShowDropdown(false); }} className="hover:text-red-500 font-bold">CLOSE ✕</button>
+                    </div>
+                    {allStudents.length > 0 ? (
+                      allStudents
+                        .filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()) || (s.rollNumber && s.rollNumber.toString().includes(studentSearch)))
+                        .map(s => {
+                          // YAHAN LOGIC HAI: Current exam aur student match check
+                          const isDone = resultList.some(res => String(res.studentId) === String(s.id) && res.exam === exam && res.session === session);
+                          return (
+                            <div 
+                              key={s.id} 
+                              onClick={() => { 
+                                if(isDone) return toast.error(`${exam} Result already exists!`); 
+                                setSelectedStudentId(s.id); 
+                                setName(s.name); 
+                                setStudentSearch(s.name); 
+                                setShowDropdown(false); 
+                              }} 
+                              className={`p-3 cursor-pointer flex justify-between items-center transition-all ${isDone ? 'bg-red-50 opacity-70' : 'hover:bg-indigo-600 hover:text-white'}`}
+                            >
+                              <div className="flex flex-col">
+                                <span className={`text-xs uppercase ${isDone ? 'text-red-400' : ''}`}>{s.name}</span>
+                                <span className={`text-[8px] font-bold ${isDone ? 'text-red-300' : 'opacity-50'}`}>ROLL: {s.rollNumber} | REG: {s.regNo || 'N/A'}</span>
+                              </div>
+                              {isDone && <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-[7px] font-black italic">✓ {exam} DONE</span>}
                             </div>
-                            
-                            {isDone ? (
-                              <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[8px] font-black group-hover:bg-white">✓ COMPLETED</span>
-                            ) : (
-                              <span className="opacity-20 text-[8px]">PENDING</span>
-                            )}
-                          </div>
-                        );
-                      })
-                    }
+                          );
+                        })
+                    ) : (
+                      <div className="p-4 text-center text-[10px] text-slate-400 italic font-bold">No students found!</div>
+                    )}
                   </div>
                 )}
-                
+
                 {selectedStudentId && (
-                  <div className="mt-4 p-5 bg-slate-900 text-emerald-400 rounded-2xl text-[10px] flex items-center justify-between italic font-black">
-                    <span>✓ SELECTED STUDENT:</span> 
-                    <span className="text-sm uppercase">{name}</span>
+                  <div className="mt-3 p-3 md:p-4 bg-indigo-900 text-white rounded-2xl text-[9px] flex items-center justify-between shadow-lg border-b-4 border-indigo-700">
+                    <div>
+                      <p className="text-indigo-300 tracking-widest mb-1">SELECTED STUDENT</p>
+                      <p className="text-xs md:text-sm font-black uppercase italic">{name}</p>
+                    </div>
+                    {!editingId && <button onClick={() => {setSelectedStudentId(""); setStudentSearch(""); setShowDropdown(true);}} className="bg-white/10 px-3 py-2 rounded-xl hover:bg-white/20 transition-all font-black">CHANGE</button>}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="rounded-[32px] border-4 border-slate-50 overflow-hidden bg-slate-50/20 mb-10">
-              <table className="w-full text-xs italic font-black uppercase">
-                <thead className="bg-slate-100 text-[10px] text-slate-400">
-                  <tr>
-                    <th className="p-5 text-left font-bold">Subject</th>
-                    <th className="p-5 text-center w-32 font-bold">Total</th>
-                    <th className="p-5 text-center w-32 text-indigo-600 font-bold">Obtained</th>
-                    <th className="p-5 text-center w-12"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white">
-                  {rows.map((r, i) => (
-                    <tr key={i} className="hover:bg-white transition-colors">
-                      <td className="p-1"><input className="w-full p-4 bg-transparent outline-none font-black text-slate-700 uppercase" placeholder="SUBJECT" value={r.subject} onChange={e => handleRowChange(i, 'subject', e.target.value)} /></td>
-                      <td className="p-1 text-center"><input type="number" className="w-full p-4 bg-transparent outline-none text-center font-bold text-slate-300" value={r.total} onChange={e => handleRowChange(i, 'total', e.target.value)} /></td>
-                      <td className="p-1 text-center"><input type="number" className="w-full p-4 bg-transparent outline-none text-center font-black text-indigo-600 text-xl" placeholder="00" value={r.marks} onChange={e => handleRowChange(i, 'marks', e.target.value)} /></td>
-                      <td className="p-1 text-center"><button onClick={() => setRows(rows.filter((_, idx) => idx !== i))} className="text-red-200 hover:text-red-500 font-black px-2">✕</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Marks Table */}
+            <div className="rounded-[20px] md:rounded-[32px] border-2 border-slate-50 overflow-hidden bg-slate-50/20 mb-8">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] md:text-xs italic font-black uppercase min-w-[400px]">
+                  <thead className="bg-slate-100 text-[9px] text-slate-400">
+                    <tr><th className="p-3 md:p-4 text-left">Subject</th><th className="p-3 md:p-4 text-center w-20 md:w-28">Total</th><th className="p-3 md:p-4 text-center w-24 md:w-32 text-indigo-600">Obt.</th><th className="p-3 md:p-4 text-center w-8"></th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-white">
+                    {rows.map((r, i) => (
+                      <tr key={i} className="hover:bg-white transition-colors">
+                        <td className="p-1"><input className="w-full p-2 md:p-3 bg-transparent outline-none font-black text-slate-700" placeholder="SUBJECT" value={r.subject} onChange={e => handleRowChange(i, 'subject', e.target.value)} /></td>
+                        <td className="p-1"><input type="number" className="w-full p-2 md:p-3 bg-transparent outline-none text-center font-bold text-slate-300" value={r.total} onChange={e => handleRowChange(i, 'total', e.target.value)} /></td>
+                        <td className="p-1"><input type="number" className="w-full p-2 md:p-3 bg-transparent outline-none text-center font-black text-indigo-600 text-base md:text-xl" placeholder="00" value={r.marks} onChange={e => handleRowChange(i, 'marks', e.target.value)} /></td>
+                        <td className="p-1 text-center"><button onClick={() => setRows(rows.filter((_, idx) => idx !== i))} className="text-red-200 hover:text-red-500 font-black px-1">✕</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             
-            <div className="flex flex-col md:flex-row gap-4 text-[10px] tracking-widest font-black uppercase italic">
-              <button onClick={() => setRows([...rows, { subject: "", total: "100", marks: "" }])} className="text-indigo-600 border-2 border-indigo-50 px-10 py-5 rounded-2xl hover:bg-indigo-50 transition-all">+ Add Subject</button>
-              <div className="flex-1 flex gap-3">
-                <button className="flex-1 bg-slate-100 py-5 rounded-2xl hover:bg-slate-200" onClick={() => { setShowForm(false); setEditingId(null); }}>Close</button>
-                <button disabled={loading} className={`flex-[2] ${loading ? 'bg-slate-300 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700 shadow-xl'} text-white py-5 rounded-2xl transition-all font-black`} onClick={saveResult}>
-                  {loading ? 'WAIT...' : editingId ? 'UPDATE' : 'PUBLISH'}
-                </button>
+            <div className="flex flex-col md:flex-row gap-3 text-[10px] font-black uppercase italic">
+              <button onClick={() => setRows([...rows, { subject: "", total: "100", marks: "" }])} className="w-full md:w-auto text-indigo-600 border-2 border-indigo-50 px-6 py-4 rounded-2xl hover:bg-indigo-50 transition-all">+ Add Subject</button>
+              <div className="flex-1 flex gap-2">
+                <button className="flex-1 bg-slate-100 py-4 rounded-2xl hover:bg-slate-200 font-black" onClick={() => { setShowForm(false); setEditingId(null); setShowDropdown(false); }}>Close</button>
+                <button disabled={loading} className={`flex-[2] py-4 rounded-2xl text-white font-black transition-all ${loading ? 'bg-slate-300' : 'bg-indigo-600 shadow-xl hover:bg-indigo-700'}`} onClick={saveResult}>{loading ? 'WAIT...' : editingId ? 'UPDATE' : 'PUBLISH'}</button>
               </div>
             </div>
           </div>
